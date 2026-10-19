@@ -9,7 +9,12 @@ from pathlib import Path
 
 import cython
 import numpy as np
-from cython.cimports.jaxcip._blas import Dl_info, dladdr, lbt_forward, openblas_set_num_threads
+from cython.cimports.jaxcip._blas import (
+    Dl_info,
+    dladdr,
+    lbt_forward,
+    openblas_set_num_threads,
+)
 from cython.cimports.jaxcip._handler import (
     ExprData,
     FunctionHandle,
@@ -88,6 +93,7 @@ from cython.cimports.jaxcip._scip import (
     SCIPsetStringParam,
     SCIPsolve,
     SCIPtechVersion,
+    SCIPvarGetName,
     SCIPwriteOrigProblem,
 )
 from cython.cimports.libc.stdlib import free, malloc
@@ -96,6 +102,7 @@ from jaxcip._options import HandlerOptions
 from jaxcip._types import (
     Domain,
     Emphasis,
+    JaxTerm,
     ParameterType,
     ScipVersion,
     Sense,
@@ -133,22 +140,26 @@ def forward_blas() -> int:
 
 def scip_version() -> ScipVersion:
     """Returns the version of the linked SCIP library."""
-    return ScipVersion(major=SCIPmajorVersion(), minor=SCIPminorVersion(), technical=SCIPtechVersion())
+    return ScipVersion(
+        major=SCIPmajorVersion(), minor=SCIPminorVersion(), technical=SCIPtechVersion()
+    )
 
 
 def parameter_table() -> tuple[tuple[str, ParameterType, str], ...]:
     """Returns the name, type and description of every parameter of SCIP with its default plugins."""
     instance = Scip("parameters")
     params: cython.pointer[cython.pointer[SCIP_PARAM]] = SCIPgetParams(instance.scip)
+    table = []
     index: cython.int
-    return tuple(
-        (
-            SCIPparamGetName(params[index]).decode(),
-            ParameterType(SCIPparamGetType(params[index])),
-            SCIPparamGetDesc(params[index]).decode(),
+    for index in range(SCIPgetNParams(instance.scip)):
+        table.append(
+            (
+                SCIPparamGetName(params[index]).decode(),
+                ParameterType(SCIPparamGetType(params[index])),
+                SCIPparamGetDesc(params[index]).decode(),
+            )
         )
-        for index in range(SCIPgetNParams(instance.scip))
-    )
+    return tuple(table)
 
 
 @cython.cclass
@@ -158,10 +169,21 @@ class Scip:
     scip: cython.pointer[SCIP]
     handles: list
     """The function handles of the problem's expressions, which must outlive the instance."""
+    addresses: object
+    """Addresses of the variables in the order they were added, as an array of `uintp`.
+
+    SCIP keeps its own list of variables sorted by type, so indices refer to this one.
+    """
+    num_variables = cython.declare(cython.int, visibility="readonly")
+    """The number of variables."""
+    num_constraints: cython.int
 
     def __cinit__(self, name: str) -> None:
         self.scip = cython.NULL
         self.handles = []
+        self.addresses = np.empty(16, dtype=np.uintp)
+        self.num_variables = 0
+        self.num_constraints = 0
         check(SCIPcreate(cython.address(self.scip)), "create an instance")
         check(SCIPincludeDefaultPlugins(self.scip), "include the default plugins")
         check(include_handler(self.scip), "include the JAX expression handler")
@@ -175,22 +197,31 @@ class Scip:
     def read(path: Path) -> Scip:
         """Reads a problem file in any format SCIP reads, such as `.osil`, `.nl` or `.cip`."""
         instance = Scip(path.stem)
-        check(SCIPreadProb(instance.scip, str(path).encode(), cython.NULL), f"read {path}")
+        check(
+            SCIPreadProb(instance.scip, str(path).encode(), cython.NULL), f"read {path}"
+        )
+        count: cython.int = SCIPgetNOrigVars(instance.scip)
+        variables: cython.pointer[cython.pointer[SCIP_VAR]] = SCIPgetOrigVars(
+            instance.scip
+        )
+        instance.addresses = np.empty(max(count, 1), dtype=np.uintp)
+        index: cython.int
+        for index in range(count):
+            instance.addresses[index] = cython.cast(cython.size_t, variables[index])
+        instance.num_variables = count
         return instance
 
     def write(self, path: Path) -> None:
         """Writes the problem in the format of the file extension, with JAX expressions opaque."""
-        check(SCIPwriteOrigProblem(self.scip, str(path).encode(), cython.NULL, False), f"write {path}")
+        check(
+            SCIPwriteOrigProblem(self.scip, str(path).encode(), cython.NULL, False),
+            f"write {path}",
+        )
 
     @property
     def infinity(self) -> float:
         """SCIP's value for infinity, the bound of unbounded variables and sides."""
         return SCIPinfinity(self.scip)
-
-    @property
-    def num_variables(self) -> int:
-        """The number of variables of the original problem."""
-        return SCIPgetNOrigVars(self.scip)
 
     @cython.cfunc
     def clamp(self, value: cython.double) -> cython.double:
@@ -201,13 +232,35 @@ class Scip:
     @cython.cfunc
     def variable(self, index: cython.int) -> cython.pointer[SCIP_VAR]:
         """Returns the variable at an index, raising an `IndexError` if there is none."""
-        if index < 0 or index >= SCIPgetNOrigVars(self.scip):
+        if index < 0 or index >= self.num_variables:
             raise IndexError(f"There is no variable {index}")
-        return SCIPgetOrigVars(self.scip)[index]
+        return cython.cast(
+            cython.pointer[SCIP_VAR], cython.cast(cython.size_t, self.addresses[index])
+        )
 
-    def add_variable(self, lower: float, upper: float, objective: float, domain: Domain) -> int:
+    @cython.cfunc
+    def variable_pointers(self) -> cython.pointer[cython.pointer[SCIP_VAR]]:
+        """Returns the variables in the order they were added."""
+        return cython.cast(
+            cython.pointer[cython.pointer[SCIP_VAR]],
+            cython.cast(cython.size_t, self.addresses.ctypes.data),
+        )
+
+    @property
+    def variable_names(self) -> tuple[str, ...]:
+        """The names of the variables in the order of their indices."""
+        variables: cython.pointer[cython.pointer[SCIP_VAR]] = self.variable_pointers()
+        names = []
+        index: cython.int
+        for index in range(self.num_variables):
+            names.append(SCIPvarGetName(variables[index]).decode())
+        return tuple(names)
+
+    def add_variable(
+        self, lower: float, upper: float, objective: float, domain: Domain
+    ) -> int:
         """Adds a variable and returns its index."""
-        index: cython.int = SCIPgetNOrigVars(self.scip)
+        index: cython.int = self.num_variables
         var: cython.pointer[SCIP_VAR] = cython.NULL
         check(
             SCIPcreateVarBasic(
@@ -222,6 +275,14 @@ class Scip:
             "create a variable",
         )
         retcode: SCIP_RETCODE = SCIPaddVar(self.scip, var)
+        if retcode == SCIP_OKAY:
+            if index == self.addresses.shape[0]:
+                self.addresses = np.concatenate(
+                    [self.addresses, np.empty(index, dtype=np.uintp)]
+                )
+            # The problem holds its own reference, so the address stays valid after releasing.
+            self.addresses[index] = cython.cast(cython.size_t, var)
+            self.num_variables += 1
         SCIPreleaseVar(self.scip, cython.address(var))
         check(retcode, "add a variable")
         return index
@@ -239,14 +300,15 @@ class Scip:
             raise ValueError("A linear constraint needs one coefficient per variable")
         variables = self.variable_array(indices)
         vars_pointer: cython.pointer[cython.pointer[SCIP_VAR]] = cython.cast(
-            cython.pointer[cython.pointer[SCIP_VAR]], cython.cast(cython.size_t, variables.ctypes.data)
+            cython.pointer[cython.pointer[SCIP_VAR]],
+            cython.cast(cython.size_t, variables.ctypes.data),
         )
         cons: cython.pointer[SCIP_CONS] = cython.NULL
         check(
             SCIPcreateConsBasicLinear(
                 self.scip,
                 cython.address(cons),
-                b"linear",
+                f"linear{self.num_constraints}".encode(),
                 count,
                 vars_pointer,
                 cython.address(coefficients[0]) if count > 0 else cython.NULL,
@@ -262,22 +324,79 @@ class Scip:
         addresses = np.empty(indices.shape[0], dtype=np.uintp)
         position: cython.int
         for position in range(indices.shape[0]):
-            addresses[position] = cython.cast(cython.size_t, self.variable(indices[position]))
+            addresses[position] = cython.cast(
+                cython.size_t, self.variable(indices[position])
+            )
         return addresses
 
     @cython.cfunc
     def add_constraint(self, cons: cython.pointer[SCIP_CONS]) -> cython.void:
         """Adds a constraint to the problem and releases it."""
         retcode: SCIP_RETCODE = SCIPaddCons(self.scip, cons)
+        self.num_constraints += 1
         SCIPreleaseCons(self.scip, cython.address(cons))
         check(retcode, "add a constraint")
 
+    @cython.cfunc
+    def jax_expression(
+        self, term: JaxTerm, options: HandlerOptions
+    ) -> cython.pointer[SCIP_EXPR]:
+        """Returns a new JAX expression over variable expressions of the term's inputs."""
+        handle: FunctionHandle = term.handle
+        params: cython.double[::1] = term.params
+        inputs: cython.int[::1] = term.inputs
+        if inputs.shape[0] != handle.num_inputs:
+            raise ValueError(
+                f"The function takes {handle.num_inputs} inputs, got {inputs.shape[0]}"
+            )
+        if params.shape[0] != handle.num_params:
+            raise ValueError(
+                f"The function takes {handle.num_params} parameters, got {params.shape[0]}"
+            )
+        num_inputs: cython.int = inputs.shape[0]
+        children: cython.pointer[cython.pointer[SCIP_EXPR]] = cython.cast(
+            cython.pointer[cython.pointer[SCIP_EXPR]],
+            malloc(num_inputs * cython.sizeof(cython.pointer[SCIP_EXPR])),
+        )
+        created: cython.int = 0
+        expr: cython.pointer[SCIP_EXPR] = cython.NULL
+        data: cython.pointer[ExprData] = cython.NULL
+        index: cython.int
+        try:
+            for index in range(num_inputs):
+                check(
+                    SCIPcreateExprVar(
+                        self.scip,
+                        cython.address(children[index]),
+                        self.variable(inputs[index]),
+                        cython.NULL,
+                        cython.NULL,
+                    ),
+                    "create a variable expression",
+                )
+                created += 1
+            data = new_expr_data(
+                handle.function, cython.address(params[0]), switches_from(options)
+            )
+            if data == cython.NULL:
+                raise MemoryError()  # pragma: no cover
+            retcode: SCIP_RETCODE = create_expression(
+                self.scip, cython.address(expr), data, children
+            )
+            if retcode != SCIP_OKAY:
+                free_expr_data(data)  # pragma: no cover
+            check(retcode, "create a JAX expression")
+        finally:
+            # The JAX expression captures its children, so the variable expressions are released.
+            for index in range(created):
+                SCIPreleaseExpr(self.scip, cython.address(children[index]))
+            free(children)
+        self.handles.append(handle)
+        return expr
+
     def add_jax_constraint(
         self,
-        handle: FunctionHandle,
-        params: cython.double[::1],
-        inputs: cython.int[::1],
-        coefficient: float,
+        terms: list,
         linear_indices: cython.int[::1],
         linear_coefficients: cython.double[::1],
         constant: float,
@@ -285,76 +404,70 @@ class Scip:
         upper: float,
         options: HandlerOptions,
     ) -> None:
-        """Adds `lower ≤ coefficient f(x[inputs], params) + linear · x[linear_indices] + constant ≤ upper`."""
-        if inputs.shape[0] != handle.num_inputs:
-            raise ValueError(f"The function takes {handle.num_inputs} inputs, got {inputs.shape[0]}")
-        if params.shape[0] != handle.num_params:
-            raise ValueError(f"The function takes {handle.num_params} parameters, got {params.shape[0]}")
+        """Adds `lower ≤ Σ c f(x[inputs], params) + linear · x[linear_indices] + constant ≤ upper`.
+
+        Each entry of `terms` is a `JaxTerm` with the function `f`, its parameters and inputs
+        and its coefficient `c`.
+        """
+        num_terms: cython.int = len(terms)
         num_linear: cython.int = linear_indices.shape[0]
         if linear_coefficients.shape[0] != num_linear:
             raise ValueError("A linear part needs one coefficient per variable")
-        num_inputs: cython.int = inputs.shape[0]
+        size: cython.int = num_terms + num_linear + 1
         children: cython.pointer[cython.pointer[SCIP_EXPR]] = cython.cast(
             cython.pointer[cython.pointer[SCIP_EXPR]],
-            malloc((num_inputs + num_linear + 1) * cython.sizeof(cython.pointer[SCIP_EXPR])),
+            malloc(size * cython.sizeof(cython.pointer[SCIP_EXPR])),
         )
         coefficients: cython.p_double = cython.cast(
-            cython.p_double, malloc((num_linear + 1) * cython.sizeof(cython.double))
+            cython.p_double, malloc(size * cython.sizeof(cython.double))
         )
         created: cython.int = 0
-        jax_expr: cython.pointer[SCIP_EXPR] = cython.NULL
         sum_expr: cython.pointer[SCIP_EXPR] = cython.NULL
         cons: cython.pointer[SCIP_CONS] = cython.NULL
-        data: cython.pointer[ExprData]
         index: cython.int
         try:
-            for index in range(num_inputs):
-                check(
-                    SCIPcreateExprVar(
-                        self.scip, cython.address(children[index]), self.variable(inputs[index]), cython.NULL, cython.NULL
-                    ),
-                    "create a variable expression",
-                )
+            for index in range(num_terms):
+                term: JaxTerm = terms[index]
+                children[created] = self.jax_expression(term, options)
+                coefficients[created] = term.coefficient
                 created += 1
-            data = new_expr_data(handle.function, cython.address(params[0]), switches_from(options))
-            if data == cython.NULL:
-                raise MemoryError()  # pragma: no cover
-            check(create_expression(self.scip, cython.address(jax_expr), data, children), "create a JAX expression")
-
-            # The sum's children are the JAX expression and the linear variables. The input
-            # expressions are released once the JAX expression has captured them.
-            for index in range(created):
-                SCIPreleaseExpr(self.scip, cython.address(children[index]))
-            created = 0
-            children[0] = jax_expr
-            coefficients[0] = coefficient
-            created = 1
             for index in range(num_linear):
                 check(
                     SCIPcreateExprVar(
                         self.scip,
-                        cython.address(children[index + 1]),
+                        cython.address(children[created]),
                         self.variable(linear_indices[index]),
                         cython.NULL,
                         cython.NULL,
                     ),
                     "create a variable expression",
                 )
-                coefficients[index + 1] = linear_coefficients[index]
+                coefficients[created] = linear_coefficients[index]
                 created += 1
             check(
                 SCIPcreateExprSum(
-                    self.scip, cython.address(sum_expr), created, children, coefficients, constant, cython.NULL, cython.NULL
+                    self.scip,
+                    cython.address(sum_expr),
+                    created,
+                    children,
+                    coefficients,
+                    constant,
+                    cython.NULL,
+                    cython.NULL,
                 ),
                 "create a sum expression",
             )
             check(
                 SCIPcreateConsBasicNonlinear(
-                    self.scip, cython.address(cons), b"jax", sum_expr, self.clamp(lower), self.clamp(upper)
+                    self.scip,
+                    cython.address(cons),
+                    f"jax{self.num_constraints}".encode(),
+                    sum_expr,
+                    self.clamp(lower),
+                    self.clamp(upper),
                 ),
                 "create a nonlinear constraint",
             )
-            self.handles.append(handle)
             self.add_constraint(cons)
         finally:
             if sum_expr != cython.NULL:
@@ -374,7 +487,10 @@ class Scip:
 
     def set_emphasis(self, emphasis: Emphasis) -> None:
         """Applies one of SCIP's predefined parameter settings."""
-        check(SCIPsetEmphasis(self.scip, emphasis.value, True), f"set the {emphasis.name} emphasis")
+        check(
+            SCIPsetEmphasis(self.scip, emphasis.value, True),
+            f"set the {emphasis.name} emphasis",
+        )
 
     @cython.cfunc
     def parameter_type(self, name: bytes) -> ParameterType:
@@ -423,16 +539,23 @@ class Scip:
                 check(SCIPgetIntParam(self.scip, key, cython.address(integer)), action)
                 return integer
             case ParameterType.LONGINT:
-                check(SCIPgetLongintParam(self.scip, key, cython.address(long_integer)), action)
+                check(
+                    SCIPgetLongintParam(self.scip, key, cython.address(long_integer)),
+                    action,
+                )
                 return long_integer
             case ParameterType.REAL:
                 check(SCIPgetRealParam(self.scip, key, cython.address(real)), action)
                 return real
             case ParameterType.CHAR:
-                check(SCIPgetCharParam(self.scip, key, cython.address(character)), action)
+                check(
+                    SCIPgetCharParam(self.scip, key, cython.address(character)), action
+                )
                 return chr(character)
             case ParameterType.STRING:
-                check(SCIPgetStringParam(self.scip, key, cython.address(string)), action)
+                check(
+                    SCIPgetStringParam(self.scip, key, cython.address(string)), action
+                )
                 return string.decode()
 
     def solve(self) -> None:
@@ -477,8 +600,8 @@ class Scip:
         if SCIPgetNSols(self.scip) == 0:
             return None
         sol: cython.pointer[SCIP_SOL] = SCIPgetBestSol(self.scip)
-        count: cython.int = SCIPgetNOrigVars(self.scip)
-        variables: cython.pointer[cython.pointer[SCIP_VAR]] = SCIPgetOrigVars(self.scip)
+        count: cython.int = self.num_variables
+        variables: cython.pointer[cython.pointer[SCIP_VAR]] = self.variable_pointers()
         values = np.empty(count)
         view: cython.double[::1] = values
         index: cython.int
@@ -488,19 +611,33 @@ class Scip:
 
     def check_solution(self, values: cython.double[::1]) -> bool:
         """Returns whether an assignment of all variables satisfies every constraint and bound."""
-        count: cython.int = SCIPgetNOrigVars(self.scip)
+        count: cython.int = self.num_variables
         if values.shape[0] != count:
-            raise ValueError(f"The problem has {count} variables, got {values.shape[0]} values")
+            raise ValueError(
+                f"The problem has {count} variables, got {values.shape[0]} values"
+            )
         sol: cython.pointer[SCIP_SOL] = cython.NULL
         feasible: SCIP_Bool = 0
-        check(SCIPcreateOrigSol(self.scip, cython.address(sol), cython.NULL), "create a solution")
+        check(
+            SCIPcreateOrigSol(self.scip, cython.address(sol), cython.NULL),
+            "create a solution",
+        )
         try:
             if count > 0:
                 check(
-                    SCIPsetSolVals(self.scip, sol, count, SCIPgetOrigVars(self.scip), cython.address(values[0])),
+                    SCIPsetSolVals(
+                        self.scip,
+                        sol,
+                        count,
+                        self.variable_pointers(),
+                        cython.address(values[0]),
+                    ),
                     "set solution values",
                 )
-            check(SCIPcheckSolOrig(self.scip, sol, cython.address(feasible), False, True), "check a solution")
+            check(
+                SCIPcheckSolOrig(self.scip, sol, cython.address(feasible), False, True),
+                "check a solution",
+            )
         finally:
             SCIPfreeSol(self.scip, cython.address(sol))
         return bool(feasible)

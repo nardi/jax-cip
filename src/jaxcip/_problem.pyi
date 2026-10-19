@@ -5,7 +5,15 @@ from jaxtyping import Float, Int
 
 from jaxcip._handler import FunctionHandle
 from jaxcip._options import HandlerOptions
-from jaxcip._types import Domain, Emphasis, ParameterType, ScipVersion, Sense, Status
+from jaxcip._types import (
+    Domain,
+    Emphasis,
+    JaxTerm,
+    ParameterType,
+    ScipVersion,
+    Sense,
+    Status,
+)
 
 ParameterValue = bool | int | float | str
 
@@ -25,7 +33,11 @@ class Scip:
     def infinity(self) -> float: ...
     @property
     def num_variables(self) -> int: ...
-    def add_variable(self, lower: float, upper: float, objective: float, domain: Domain) -> int: ...
+    @property
+    def variable_names(self) -> tuple[str, ...]: ...
+    def add_variable(
+        self, lower: float, upper: float, objective: float, domain: Domain
+    ) -> int: ...
     def add_linear_constraint(
         self,
         indices: Int[np.ndarray, " k"],
@@ -36,10 +48,7 @@ class Scip:
     def variable_array(self, indices: Int[np.ndarray, " k"]) -> np.ndarray: ...
     def add_jax_constraint(
         self,
-        handle: FunctionHandle,
-        params: Float[np.ndarray, " m"],
-        inputs: Int[np.ndarray, " n"],
-        coefficient: float,
+        terms: list[JaxTerm],
         linear_indices: Int[np.ndarray, " k"],
         linear_coefficients: Float[np.ndarray, " k"],
         constant: float,

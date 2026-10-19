@@ -1,5 +1,78 @@
 """JAX functions as nonlinear expressions in the SCIP optimization solver."""
 
-from jaxcip._problem import forward_blas
+from jaxcip import _compile
+from jaxcip._cache import BuildStatistics, initialize
+from jaxcip._compile import CompiledProblem, compile  # noqa: A004
+from jaxcip._options import (
+    CompileOptions,
+    HandlerOptions,
+    RelaxationMode,
+    RelaxationOptions,
+    ScipSetting,
+    SolveOptions,
+)
+from jaxcip._problem import forward_blas, scip_version
+from jaxcip._problem_types import (
+    BatchedConstraint,
+    Constraint,
+    ParametricFunction,
+    Problem,
+    RowFunction,
+    Variable,
+)
+from jaxcip._scip_parameters import ScipParameter
+from jaxcip._solve import FileSolution, Solution, solve, solve_file
+from jaxcip._types import (
+    CallbackStatistics,
+    Domain,
+    Emphasis,
+    HandlerStatistics,
+    RuntimeInfo,
+    ScipVersion,
+    Sense,
+    Status,
+    Verbosity,
+)
 
 forward_blas()
+
+
+def clear_caches() -> None:
+    """Forgets the terms compiled in this process, so later builds use the disk cache."""
+    _compile.compiled_terms.clear()
+
+
+__all__ = [
+    "BatchedConstraint",
+    "BuildStatistics",
+    "CallbackStatistics",
+    "CompileOptions",
+    "CompiledProblem",
+    "Constraint",
+    "Domain",
+    "Emphasis",
+    "FileSolution",
+    "HandlerOptions",
+    "HandlerStatistics",
+    "ParametricFunction",
+    "Problem",
+    "RelaxationMode",
+    "RelaxationOptions",
+    "RowFunction",
+    "RuntimeInfo",
+    "ScipParameter",
+    "ScipSetting",
+    "ScipVersion",
+    "Sense",
+    "SolveOptions",
+    "Solution",
+    "Status",
+    "Variable",
+    "Verbosity",
+    "clear_caches",
+    "compile",
+    "initialize",
+    "scip_version",
+    "solve",
+    "solve_file",
+]

@@ -1,6 +1,13 @@
 python.install_sources(
   '__init__.py',
+  '_analysis.py',
+  '_cache.py',
+  '_compile.py',
   '_options.py',
+  '_problem_types.py',
+  '_programs.py',
+  '_scip_parameters.py',
+  '_solve.py',
   '_types.py',
   '_handler.pyi',
   '_problem.pyi',

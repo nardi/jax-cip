@@ -4,9 +4,10 @@ from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
-from jaxtyping import Float
+from jaxtyping import Float, Int
 
 if TYPE_CHECKING:
+    from jaxcip._handler import FunctionHandle
     from jaxcip._runtime import Executable
 
 
@@ -223,3 +224,14 @@ class Programs(NamedTuple):
     concave: "Executable"
     interval: "Executable"
     gradient_interval: "Executable | None"
+
+
+class JaxTerm(NamedTuple):
+    """One term `coefficient · f(x[inputs], params)` of a constraint, with `f` compiled."""
+
+    handle: "FunctionHandle"
+    params: Float[np.ndarray, " m"]
+    """Parameter values of this term, as many as the handle takes."""
+    inputs: Int[np.ndarray, " n"]
+    """Indices of the term's input variables, as `np.intc`."""
+    coefficient: float

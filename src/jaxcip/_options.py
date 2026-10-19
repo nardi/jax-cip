@@ -1,6 +1,10 @@
 """Options of compiling and solving."""
 
+from enum import Enum
 from typing import NamedTuple
+
+from jaxcip._scip_parameters import ScipParameter
+from jaxcip._types import Emphasis, Verbosity
 
 
 class HandlerOptions(NamedTuple):
@@ -26,3 +30,64 @@ class HandlerOptions(NamedTuple):
     """Whether SCIP gets exact Hessian-vector products of each function."""
     zero_copy: bool = True
     """Whether executions read and write host memory directly when the plugin allows it."""
+
+
+class RelaxationMode(Enum):
+    """How the gradients of the convex and concave relaxations are computed."""
+
+    FORWARD = "forward"
+    """Forward mode, which gives smaller programs for functions of few inputs."""
+    REVERSE = "reverse"
+    """Reverse mode, which is cheaper when a function has many inputs."""
+
+
+class RelaxationOptions(NamedTuple):
+    """Options of the McCormick relaxations that JAXormick builds for each function."""
+
+    mode: RelaxationMode = RelaxationMode.FORWARD
+    alpha_bb: bool = False
+    """Whether relaxations are intersected with αBB relaxations from Hessian bounds."""
+    tighten_bounds: bool = False
+    """Whether intermediate intervals are narrowed by affine relaxations at the box middle."""
+
+
+class CompileOptions(NamedTuple):
+    """Options of turning the functions of a problem into SCIP expressions."""
+
+    relaxation: RelaxationOptions = RelaxationOptions()
+    handler: HandlerOptions = HandlerOptions()
+    split_sums: bool = True
+    """Whether a sum of nonlinear terms becomes one SCIP expression per term."""
+    gradient_interval_limit: int = 300
+    """Largest function, in jaxpr equations, that gets gradient bounds for monotonicity.
+
+    XLA takes tens of seconds to compile the interval derivative of large functions, and
+    monotonicity is optional.
+    """
+    disk_cache: bool = True
+    """Whether lowered programs and executables are stored in the cache directory.
+
+    The directory is `JAXCIP_CACHE_DIR` if set, and `~/.cache/jaxcip` otherwise.
+    """
+
+
+class ScipSetting(NamedTuple):
+    """A value for one SCIP parameter."""
+
+    parameter: ScipParameter
+    value: bool | int | float | str
+
+
+class SolveOptions(NamedTuple):
+    """Limits and settings of one solve."""
+
+    time_limit: float | None = None
+    """Seconds after which SCIP stops, or `None` for no limit."""
+    gap_limit: float | None = None
+    """Relative gap at which SCIP stops, or `None` for SCIP's default."""
+    node_limit: int | None = None
+    """Number of nodes after which SCIP stops, or `None` for no limit."""
+    emphasis: Emphasis = Emphasis.DEFAULT
+    verbosity: Verbosity = Verbosity.QUIET
+    settings: tuple[ScipSetting, ...] = ()
+    """Further parameter values, applied after the fields above."""

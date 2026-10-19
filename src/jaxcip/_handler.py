@@ -13,8 +13,8 @@ results, because SCIP often asks for the same value, bounds or estimator again.
 import cython
 import numpy as np
 from cython.cimports.jaxcip._runtime import (
-    Executable,
     MAX_OUTPUTS,
+    Executable,
     Input,
     ProgramSpec,
     alias_buffer,
@@ -180,7 +180,9 @@ def run(
 @cython.inline
 @cython.nogil
 @cython.exceptval(check=False)
-def same(first: cython.p_double, second: cython.p_double, count: cython.int) -> cython.bint:
+def same(
+    first: cython.p_double, second: cython.p_double, count: cython.int
+) -> cython.bint:
     """Returns whether two arrays of doubles are bitwise equal."""
     return memcmp(first, second, count * cython.sizeof(cython.double)) == 0
 
@@ -189,7 +191,9 @@ def same(first: cython.p_double, second: cython.p_double, count: cython.int) -> 
 @cython.nogil
 @cython.exceptval(check=False)
 def new_expr_data(
-    function: cython.pointer[Function], params: cython.pointer[cython.const[cython.double]], switches: Switches
+    function: cython.pointer[Function],
+    params: cython.pointer[cython.const[cython.double]],
+    switches: Switches,
 ) -> cython.pointer[ExprData]:
     """Returns new expression data with a copy of `params` and empty caches, or NULL on failure."""
     n: cython.int = function.n
@@ -216,7 +220,9 @@ def new_expr_data(
         + 2 * ESTIMATE_CACHE_SIZE * (4 * n + 1)
         + 4 * n
     )
-    cursor: cython.p_double = cython.cast(cython.p_double, malloc(total * cython.sizeof(cython.double)))
+    cursor: cython.p_double = cython.cast(
+        cython.p_double, malloc(total * cython.sizeof(cython.double))
+    )
     data.cache_block = cursor
     data.value_keys = cursor
     cursor += VALUE_CACHE_SIZE * n
@@ -269,7 +275,9 @@ def get_data(expr: cython.pointer[SCIP_EXPR]) -> cython.pointer[ExprData]:
 @cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
-def read_child_values(expr: cython.pointer[SCIP_EXPR], destination: cython.p_double) -> cython.bint:
+def read_child_values(
+    expr: cython.pointer[SCIP_EXPR], destination: cython.p_double
+) -> cython.bint:
     """Copies the children's evaluation values and returns whether all are valid."""
     children: cython.pointer[cython.pointer[SCIP_EXPR]] = SCIPexprGetChildren(expr)
     index: cython.int
@@ -316,10 +324,9 @@ def eval_callback(
         if not ensure_gradient(data, CALLBACK_EVAL):
             return SCIP_OKAY
         value = data.gradient_value
-    elif (
-        run(data, PROGRAM_VALUE, cython.address(value), cython.NULL, CALLBACK_EVAL) != 0
-        or not isfinite(value)
-    ):
+    elif run(
+        data, PROGRAM_VALUE, cython.address(value), cython.NULL, CALLBACK_EVAL
+    ) != 0 or not isfinite(value):
         return SCIP_OKAY
     val[0] = value
     if data.switches.caches:
@@ -334,7 +341,9 @@ def eval_callback(
 @cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
-def ensure_gradient(data: cython.pointer[ExprData], callback: cython.int) -> cython.bint:
+def ensure_gradient(
+    data: cython.pointer[ExprData], callback: cython.int
+) -> cython.bint:
     """Fills the gradient cache for the point in the `x` input and returns whether it is valid.
 
     SCIP asks for one partial derivative or one directional derivative per call, so a single
@@ -347,12 +356,23 @@ def ensure_gradient(data: cython.pointer[ExprData], callback: cython.int) -> cyt
         function.statistics.hits[callback] += 1
         return True
     value: cython.double
-    if run(data, PROGRAM_VALUE_AND_GRADIENT, cython.address(value), data.gradient, callback) != 0:
+    if (
+        run(
+            data,
+            PROGRAM_VALUE_AND_GRADIENT,
+            cython.address(value),
+            data.gradient,
+            callback,
+        )
+        != 0
+    ):
         data.gradient_valid = False
         return False
     memcpy(data.gradient_key, x, n * cython.sizeof(cython.double))
     data.gradient_value = value
-    data.gradient_valid = all_finite(cython.address(value), 1) and all_finite(data.gradient, n)
+    data.gradient_valid = all_finite(cython.address(value), 1) and all_finite(
+        data.gradient, n
+    )
     return data.gradient_valid
 
 
@@ -391,7 +411,9 @@ def bwdiff_callback(
 @cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
-def read_child_dots(expr: cython.pointer[SCIP_EXPR], destination: cython.p_double) -> cython.bint:
+def read_child_dots(
+    expr: cython.pointer[SCIP_EXPR], destination: cython.p_double
+) -> cython.bint:
     """Copies the children's directional derivatives and returns whether all are valid."""
     children: cython.pointer[cython.pointer[SCIP_EXPR]] = SCIPexprGetChildren(expr)
     index: cython.int
@@ -460,10 +482,23 @@ def bwfwdiff_callback(
         or not read_child_dots(expr, dots)
     ):
         return SCIP_OKAY
-    if data.hessian_valid and same(x, data.hessian_key, n) and same(dots, data.hessian_key + n, n):
+    if (
+        data.hessian_valid
+        and same(x, data.hessian_key, n)
+        and same(dots, data.hessian_key + n, n)
+    ):
         function.statistics.hits[CALLBACK_BWFWDIFF] += 1
     else:
-        if run(data, PROGRAM_HESSIAN_VECTOR, data.hessian, cython.NULL, CALLBACK_BWFWDIFF) != 0:
+        if (
+            run(
+                data,
+                PROGRAM_HESSIAN_VECTOR,
+                data.hessian,
+                cython.NULL,
+                CALLBACK_BWFWDIFF,
+            )
+            != 0
+        ):
             data.hessian_valid = False
             return SCIP_OKAY
         memcpy(data.hessian_key, x, n * cython.sizeof(cython.double))
@@ -530,9 +565,22 @@ def inteval_callback(
             key = data.bounds_keys + 2 * n * index
             if same(lower, key, n) and same(upper, key + n, n):
                 function.statistics.hits[CALLBACK_INTEVAL] += 1
-                set_interval(interval, data.bounds_results[2 * index], data.bounds_results[2 * index + 1])
+                set_interval(
+                    interval,
+                    data.bounds_results[2 * index],
+                    data.bounds_results[2 * index + 1],
+                )
                 return SCIP_OKAY
-    if run(data, PROGRAM_INTERVAL, cython.address(result[0]), cython.address(result[1]), CALLBACK_INTEVAL) != 0:
+    if (
+        run(
+            data,
+            PROGRAM_INTERVAL,
+            cython.address(result[0]),
+            cython.address(result[1]),
+            CALLBACK_INTEVAL,
+        )
+        != 0
+    ):
         return SCIP_OKAY
     set_interval(interval, result[0], result[1])
     if data.switches.caches:
@@ -587,7 +635,11 @@ def compute_estimator(
     if data.switches.caches:
         for index in range(data.estimate_count[side]):
             key = data.estimate_keys[side] + 3 * n * index
-            if same(x, key, n) and same(lower, key + n, n) and same(upper, key + 2 * n, n):
+            if (
+                same(x, key, n)
+                and same(lower, key + n, n)
+                and same(upper, key + 2 * n, n)
+            ):
                 function.statistics.hits[callback] += 1
                 result = data.estimate_results[side] + (n + 1) * index
                 constant[0] = result[0]
@@ -596,13 +648,16 @@ def compute_estimator(
 
     program: cython.int = PROGRAM_CONCAVE if side == 1 else PROGRAM_CONVEX
     value: cython.double
-    success: cython.bint = (
-        run(data, program, cython.address(value), coefficients, callback) == 0 and isfinite(value)
-    )
+    success: cython.bint = run(
+        data, program, cython.address(value), coefficients, callback
+    ) == 0 and isfinite(value)
     if success:
         constant[0] = value
         for index in range(n):
-            if not isfinite(coefficients[index]) or fabs(coefficients[index]) > MAX_ESTIMATOR_COEFFICIENT:
+            if (
+                not isfinite(coefficients[index])
+                or fabs(coefficients[index]) > MAX_ESTIMATOR_COEFFICIENT
+            ):
                 success = False
                 break
             constant[0] -= coefficients[index] * x[index]
@@ -617,7 +672,9 @@ def compute_estimator(
         memcpy(result + 1, coefficients, size)
         data.estimate_success[side][index] = success
         data.estimate_next[side] = (index + 1) % ESTIMATE_CACHE_SIZE
-        data.estimate_count[side] = min(data.estimate_count[side] + 1, ESTIMATE_CACHE_SIZE)
+        data.estimate_count[side] = min(
+            data.estimate_count[side] + 1, ESTIMATE_CACHE_SIZE
+        )
     return success
 
 
@@ -662,9 +719,14 @@ def estimate_callback(
         # The relaxations are defined on the box, and a plane anchored anywhere in it holds on
         # all of it.
         x[index] = min(max(refpoint[index], lower[index]), upper[index])
-        if localbounds[index].inf != globalbounds[index].inf or localbounds[index].sup != globalbounds[index].sup:
+        if (
+            localbounds[index].inf != globalbounds[index].inf
+            or localbounds[index].sup != globalbounds[index].sup
+        ):
             is_global = False
-    success[0] = compute_estimator(data, 1 if overestimate else 0, CALLBACK_ESTIMATE, constant, coefs)
+    success[0] = compute_estimator(
+        data, 1 if overestimate else 0, CALLBACK_ESTIMATE, constant, coefs
+    )
     islocal[0] = not is_global
     return SCIP_OKAY
 
@@ -695,7 +757,9 @@ def initestimates_callback(
     if not data.switches.init_estimates:
         return SCIP_OKAY
     for index in range(function.n):
-        if SCIPisInfinity(scip, -bounds[index].inf) or SCIPisInfinity(scip, bounds[index].sup):
+        if SCIPisInfinity(scip, -bounds[index].inf) or SCIPisInfinity(
+            scip, bounds[index].sup
+        ):
             return SCIP_OKAY
         lower[index] = bounds[index].inf
         upper[index] = bounds[index].sup
@@ -732,7 +796,10 @@ def monotonicity_callback(
     children: cython.pointer[cython.pointer[SCIP_EXPR]] = SCIPexprGetChildren(expr)
     function.statistics.calls[CALLBACK_MONOTONICITY] += 1
     result[0] = SCIP_MONOTONE_UNKNOWN
-    if not data.switches.monotonicity or function.programs[PROGRAM_GRADIENT_INTERVAL].handle == cython.NULL:
+    if (
+        not data.switches.monotonicity
+        or function.programs[PROGRAM_GRADIENT_INTERVAL].handle == cython.NULL
+    ):
         return SCIP_OKAY
     for index in range(n):
         if SCIPevalExprActivity(scip, children[index]) != SCIP_OKAY:
@@ -795,13 +862,19 @@ def tighten_from_plane(
     term: cython.double
     bound: cython.double
     for index in range(n):
-        smallest += min(weights[index] * childrenbounds[index].inf, weights[index] * childrenbounds[index].sup)
+        smallest += min(
+            weights[index] * childrenbounds[index].inf,
+            weights[index] * childrenbounds[index].sup,
+        )
     if constant + smallest > rhs + tolerance * (1.0 + fabs(rhs)):
         return True
     for index in range(n):
         if fabs(weights[index]) < 1e-9:
             continue
-        term = min(weights[index] * childrenbounds[index].inf, weights[index] * childrenbounds[index].sup)
+        term = min(
+            weights[index] * childrenbounds[index].inf,
+            weights[index] * childrenbounds[index].sup,
+        )
         bound = (rhs - constant - (smallest - term)) / weights[index]
         if weights[index] > 0.0:
             bound += tolerance * (1.0 + fabs(bound))
@@ -817,7 +890,9 @@ def tighten_from_plane(
 @cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
-def center_box(function: cython.pointer[Function], childrenbounds: cython.pointer[SCIP_INTERVAL]) -> cython.void:
+def center_box(
+    function: cython.pointer[Function], childrenbounds: cython.pointer[SCIP_INTERVAL]
+) -> cython.void:
     """Sets the bound inputs to the children's bounds and the `x` input to the box center."""
     x: cython.p_double = function.inputs[SLOT_X].host
     lower: cython.p_double = function.inputs[SLOT_LOWER].host
@@ -865,14 +940,20 @@ def reverseprop_callback(
     center_box(function, childrenbounds)
     if (
         bounds.sup < SCIP_INTERVAL_INFINITY
-        and compute_estimator(data, 0, CALLBACK_REVERSEPROP, cython.address(constant), weights)
-        and tighten_from_plane(constant, weights, bounds.sup, n, tolerance, childrenbounds)
+        and compute_estimator(
+            data, 0, CALLBACK_REVERSEPROP, cython.address(constant), weights
+        )
+        and tighten_from_plane(
+            constant, weights, bounds.sup, n, tolerance, childrenbounds
+        )
     ):
         infeasible[0] = True
         return SCIP_OKAY
     if bounds.inf > -SCIP_INTERVAL_INFINITY:
         center_box(function, childrenbounds)
-        if compute_estimator(data, 1, CALLBACK_REVERSEPROP, cython.address(constant), weights):
+        if compute_estimator(
+            data, 1, CALLBACK_REVERSEPROP, cython.address(constant), weights
+        ):
             for index in range(n):
                 weights[index] = -weights[index]
             infeasible[0] = tighten_from_plane(
@@ -906,11 +987,14 @@ def getsymdata_callback(
     description.ncoefficients = n
     if (
         allocRealArray(scip, cython.address(description.constants), m + 1) != SCIP_OKAY
-        or allocRealArray(scip, cython.address(description.coefficients), n) != SCIP_OKAY
+        or allocRealArray(scip, cython.address(description.coefficients), n)
+        != SCIP_OKAY
         or allocExprArray(scip, cython.address(description.children), n) != SCIP_OKAY
     ):
         return SCIP_NOMEMORY  # pragma: no cover
-    description.constants[0] = cython.cast(cython.double, cython.cast(uintptr_t, data.function) % 1000003)
+    description.constants[0] = cython.cast(
+        cython.double, cython.cast(uintptr_t, data.function) % 1000003
+    )
     for index in range(m):
         description.constants[index + 1] = data.params.host[index]
     for index in range(n):
@@ -931,7 +1015,9 @@ def copydata_callback(
 ) -> SCIP_RETCODE:
     """Copies the expression data into a copy of SCIP, sharing the function with empty caches."""
     source: cython.pointer[ExprData] = get_data(sourceexpr)
-    copy: cython.pointer[ExprData] = new_expr_data(source.function, source.params.host, source.switches)
+    copy: cython.pointer[ExprData] = new_expr_data(
+        source.function, source.params.host, source.switches
+    )
     if copy == cython.NULL:
         return SCIP_NOMEMORY  # pragma: no cover
     targetexprdata[0] = cython.cast(cython.pointer[SCIP_EXPRDATA], copy)
@@ -941,7 +1027,9 @@ def copydata_callback(
 @cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
-def freedata_callback(scip: cython.pointer[SCIP], expr: cython.pointer[SCIP_EXPR]) -> SCIP_RETCODE:
+def freedata_callback(
+    scip: cython.pointer[SCIP], expr: cython.pointer[SCIP_EXPR]
+) -> SCIP_RETCODE:
     """Frees the expression data."""
     free_expr_data(get_data(expr))
     SCIPexprSetData(expr, cython.NULL)
@@ -952,7 +1040,9 @@ def freedata_callback(scip: cython.pointer[SCIP], expr: cython.pointer[SCIP_EXPR
 @cython.nogil
 @cython.exceptval(check=False)
 def compare_callback(
-    scip: cython.pointer[SCIP], expr1: cython.pointer[SCIP_EXPR], expr2: cython.pointer[SCIP_EXPR]
+    scip: cython.pointer[SCIP],
+    expr1: cython.pointer[SCIP_EXPR],
+    expr2: cython.pointer[SCIP_EXPR],
 ) -> cython.int:
     """Orders expressions by function, then by parameters, then by children."""
     first: cython.pointer[ExprData] = get_data(expr1)
@@ -960,12 +1050,19 @@ def compare_callback(
     index: cython.int
     order: cython.int
     if first.function != second.function:
-        return -1 if cython.cast(uintptr_t, first.function) < cython.cast(uintptr_t, second.function) else 1
+        return (
+            -1
+            if cython.cast(uintptr_t, first.function)
+            < cython.cast(uintptr_t, second.function)
+            else 1
+        )
     for index in range(first.function.m):
         if first.params.host[index] != second.params.host[index]:
             return -1 if first.params.host[index] < second.params.host[index] else 1
     for index in range(first.function.n):
-        order = SCIPcompareExpr(scip, SCIPexprGetChildren(expr1)[index], SCIPexprGetChildren(expr2)[index])
+        order = SCIPcompareExpr(
+            scip, SCIPexprGetChildren(expr1)[index], SCIPexprGetChildren(expr2)[index]
+        )
         if order != 0:
             return order
     return 0
@@ -983,11 +1080,17 @@ def hash_callback(
     """Hashes the function, the parameters and the children."""
     data: cython.pointer[ExprData] = get_data(expr)
     address: uintptr_t = cython.cast(uintptr_t, data.function)
-    key: cython.uint = cython.cast(cython.uint, address >> 4) ^ cython.cast(cython.uint, address >> 36)
+    key: cython.uint = cython.cast(cython.uint, address >> 4) ^ cython.cast(
+        cython.uint, address >> 36
+    )
     bits: cython.ulonglong
     index: cython.int
     for index in range(data.function.m):
-        memcpy(cython.address(bits), cython.address(data.params.host[index]), cython.sizeof(bits))
+        memcpy(
+            cython.address(bits),
+            cython.address(data.params.host[index]),
+            cython.sizeof(bits),
+        )
         key = key * 31 + cython.cast(cython.uint, bits ^ (bits >> 32))
     for index in range(data.function.n):
         key = key * 31 + childrenhashes[index]
@@ -998,7 +1101,9 @@ def hash_callback(
 @cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
-def copyhdlr_callback(scip: cython.pointer[SCIP], sourceexprhdlr: cython.pointer[SCIP_EXPRHDLR]) -> SCIP_RETCODE:
+def copyhdlr_callback(
+    scip: cython.pointer[SCIP], sourceexprhdlr: cython.pointer[SCIP_EXPRHDLR]
+) -> SCIP_RETCODE:
     """Includes the handler into copies of SCIP, which some primal heuristics solve."""
     return include_handler(scip)
 
@@ -1079,7 +1184,9 @@ class FunctionHandle:
     A SCIP problem keeps the handles of its expressions alive for as long as it exists.
     """
 
-    def __cinit__(self, num_inputs: cython.int, num_params: cython.int, programs: Programs) -> None:
+    def __cinit__(
+        self, num_inputs: cython.int, num_params: cython.int, programs: Programs
+    ) -> None:
         require_runtime()
         if num_inputs < 1:
             raise ValueError("A function needs at least one input")
@@ -1098,7 +1205,9 @@ class FunctionHandle:
         for slot in range(SLOT_PARAMS):
             function.inputs[slot].host = aligned_doubles(num_inputs)
             function.inputs[slot].size = num_inputs
-            function.inputs[slot].buffer = alias_buffer(function.inputs[slot].host, num_inputs)
+            function.inputs[slot].buffer = alias_buffer(
+                function.inputs[slot].host, num_inputs
+            )
 
         executable: Executable
         index: cython.int
@@ -1176,18 +1285,29 @@ class FunctionHandle:
         gradient = np.empty(self.num_inputs)
         view: cython.double[::1] = gradient
         self.set_input(SLOT_X, x)
-        run_direct(self, Program.VALUE_AND_GRADIENT, params, cython.address(value), cython.address(view[0]))
+        run_direct(
+            self,
+            Program.VALUE_AND_GRADIENT,
+            params,
+            cython.address(value),
+            cython.address(view[0]),
+        )
         return value, gradient
 
     def hessian_vector(
-        self, x: cython.double[::1], direction: cython.double[::1], params: cython.double[::1]
+        self,
+        x: cython.double[::1],
+        direction: cython.double[::1],
+        params: cython.double[::1],
     ) -> np.ndarray:
         """Runs the Hessian-vector program and returns the Hessian in `x` times `direction`."""
         product = np.empty(self.num_inputs)
         view: cython.double[::1] = product
         self.set_input(SLOT_X, x)
         self.set_input(SLOT_DIRECTION, direction)
-        run_direct(self, Program.HESSIAN_VECTOR, params, cython.address(view[0]), cython.NULL)
+        run_direct(
+            self, Program.HESSIAN_VECTOR, params, cython.address(view[0]), cython.NULL
+        )
         return product
 
     def estimator(
@@ -1209,25 +1329,45 @@ class FunctionHandle:
         coefficients = np.empty(self.num_inputs)
         view: cython.double[::1] = coefficients
         constant: cython.double = 0.0
-        data: cython.pointer[ExprData] = direct_data(self, params, switches_from(DIRECT_SWITCHES))
+        data: cython.pointer[ExprData] = direct_data(
+            self, params, switches_from(DIRECT_SWITCHES)
+        )
         success: cython.bint = compute_estimator(
-            data, 1 if overestimate else 0, CALLBACK_ESTIMATE, cython.address(constant), cython.address(view[0])
+            data,
+            1 if overestimate else 0,
+            CALLBACK_ESTIMATE,
+            cython.address(constant),
+            cython.address(view[0]),
         )
         free_expr_data(data)
-        return Estimator(success=bool(success), constant=constant, coefficients=coefficients)
+        return Estimator(
+            success=bool(success), constant=constant, coefficients=coefficients
+        )
 
     def interval(
-        self, lower: cython.double[::1], upper: cython.double[::1], params: cython.double[::1]
+        self,
+        lower: cython.double[::1],
+        upper: cython.double[::1],
+        params: cython.double[::1],
     ) -> Interval:
         """Runs the interval program and returns bounds on the value over the box."""
         result: cython.double[2]
         self.set_input(SLOT_LOWER, lower)
         self.set_input(SLOT_UPPER, upper)
-        run_direct(self, Program.INTERVAL, params, cython.address(result[0]), cython.address(result[1]))
+        run_direct(
+            self,
+            Program.INTERVAL,
+            params,
+            cython.address(result[0]),
+            cython.address(result[1]),
+        )
         return Interval(lower=result[0], upper=result[1])
 
     def gradient_interval(
-        self, lower: cython.double[::1], upper: cython.double[::1], params: cython.double[::1]
+        self,
+        lower: cython.double[::1],
+        upper: cython.double[::1],
+        params: cython.double[::1],
     ) -> Interval:
         """Runs the gradient interval program and returns bounds on the gradient over the box."""
         low = np.empty(self.num_inputs)
@@ -1236,8 +1376,12 @@ class FunctionHandle:
         high_view: cython.double[::1] = high
         self.set_input(SLOT_LOWER, lower)
         self.set_input(SLOT_UPPER, upper)
-        run_direct(self, 
-            Program.GRADIENT_INTERVAL, params, cython.address(low_view[0]), cython.address(high_view[0])
+        run_direct(
+            self,
+            Program.GRADIENT_INTERVAL,
+            params,
+            cython.address(low_view[0]),
+            cython.address(high_view[0]),
         )
         return Interval(lower=low, upper=high)
 
@@ -1263,7 +1407,9 @@ class FunctionHandle:
         index: cython.int = program
         if self.function.programs[index].handle == cython.NULL:
             raise ValueError(f"The function has no {program.name.lower()} program")
-        data: cython.pointer[ExprData] = direct_data(self, params, switches_from(DIRECT_SWITCHES))
+        data: cython.pointer[ExprData] = direct_data(
+            self, params, switches_from(DIRECT_SWITCHES)
+        )
         first: cython.p_double = aligned_doubles(self.num_inputs + 1)
         second: cython.p_double = aligned_doubles(self.num_inputs + 1)
         size: cython.size_t = self.num_inputs * cython.sizeof(cython.double)
@@ -1301,7 +1447,9 @@ def run_direct(
 ) -> cython.void:
     """Runs one program of a handle on its current host inputs, raising an error on failure."""
     index: cython.int = program
-    data: cython.pointer[ExprData] = direct_data(handle, params, switches_from(DIRECT_SWITCHES))
+    data: cython.pointer[ExprData] = direct_data(
+        handle, params, switches_from(DIRECT_SWITCHES)
+    )
     status: cython.int = run(data, index, first, second, CALLBACK_EVAL)
     free_expr_data(data)
     if status != 0:

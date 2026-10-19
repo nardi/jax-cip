@@ -7,7 +7,10 @@ copies.
 """
 
 import cython
-from cython.cimports.cpython.bytes import PyBytes_AsStringAndSize, PyBytes_FromStringAndSize
+from cython.cimports.cpython.bytes import (
+    PyBytes_AsStringAndSize,
+    PyBytes_FromStringAndSize,
+)
 from cython.cimports.jaxcip._pjrt import (
     PJRT_Buffer,
     PJRT_Buffer_Destroy_Args,
@@ -195,7 +198,9 @@ def buffer_from_host(
     if alias:
         arguments.host_buffer_semantics = PJRT_HostBufferSemantics_kImmutableZeroCopy
     else:
-        arguments.host_buffer_semantics = PJRT_HostBufferSemantics_kImmutableOnlyDuringCall
+        arguments.host_buffer_semantics = (
+            PJRT_HostBufferSemantics_kImmutableOnlyDuringCall
+        )
     if check(api.PJRT_Client_BufferFromHostBuffer(cython.address(arguments))) != 0:
         return cython.NULL
 
@@ -259,7 +264,9 @@ def execute(
         if use_aliases:
             arguments[index] = inputs[index].buffer
         else:
-            created[index] = buffer_from_host(inputs[index].host, inputs[index].size, False)
+            created[index] = buffer_from_host(
+                inputs[index].host, inputs[index].size, False
+            )
             arguments[index] = created[index]
             if created[index] == cython.NULL:
                 release_buffers(created, index)
@@ -301,7 +308,11 @@ def execute(
                 pointer.buffer = results[index]
                 status = check(api.PJRT_Buffer_UnsafePointer(cython.address(pointer)))
                 if status == 0:
-                    memcpy(outputs[index], cython.cast(cython.p_void, pointer.buffer_pointer), size)
+                    memcpy(
+                        outputs[index],
+                        cython.cast(cython.p_void, pointer.buffer_pointer),
+                        size,
+                    )
             else:
                 memset(cython.address(transfer), 0, cython.sizeof(transfer))
                 transfer.struct_size = PJRT_Buffer_ToHostBuffer_Args_STRUCT_SIZE
@@ -319,7 +330,9 @@ def execute(
 @cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
-def release_buffers(buffers: cython.pointer[cython.pointer[PJRT_Buffer]], count: cython.int) -> cython.void:
+def release_buffers(
+    buffers: cython.pointer[cython.pointer[PJRT_Buffer]], count: cython.int
+) -> cython.void:
     """Frees the first `count` buffers of an array, ignoring NULL entries."""
     index: cython.int
     for index in range(count):
@@ -425,7 +438,9 @@ def initialize(plugin_path: str) -> RuntimeInfo:
     pointer.struct_size = PJRT_Buffer_UnsafePointer_Args_STRUCT_SIZE
     pointer.buffer = buffer
     check(api.PJRT_Buffer_UnsafePointer(cython.address(pointer)))
-    can_alias = can_read_inplace and pointer.buffer_pointer == cython.cast(uintptr_t, probe)
+    can_alias = can_read_inplace and pointer.buffer_pointer == cython.cast(
+        uintptr_t, probe
+    )
     destroy_buffer(buffer)
     free(probe)
     return runtime_info()
@@ -485,7 +500,9 @@ class Executable:
         options_data: cython.p_char
         code_size: cython.Py_ssize_t
         options_size: cython.Py_ssize_t
-        PyBytes_AsStringAndSize(code, cython.address(code_data), cython.address(code_size))
+        PyBytes_AsStringAndSize(
+            code, cython.address(code_data), cython.address(code_size)
+        )
         PyBytes_AsStringAndSize(
             compile_options, cython.address(options_data), cython.address(options_size)
         )
@@ -523,7 +540,10 @@ class Executable:
         arguments.client = client
         arguments.serialized_executable = data
         arguments.serialized_executable_size = size
-        if check(api.PJRT_Executable_DeserializeAndLoad(cython.address(arguments))) != 0:
+        if (
+            check(api.PJRT_Executable_DeserializeAndLoad(cython.address(arguments)))
+            != 0
+        ):
             raise_last_error("PJRT_Executable_DeserializeAndLoad")
         return Executable.wrap(arguments.loaded_executable)
 
@@ -550,7 +570,9 @@ class Executable:
         memset(cython.address(arguments), 0, cython.sizeof(arguments))
         arguments.struct_size = PJRT_Executable_Serialize_Args_STRUCT_SIZE
         arguments.executable = unloaded
-        status: cython.int = check(api.PJRT_Executable_Serialize(cython.address(arguments)))
+        status: cython.int = check(
+            api.PJRT_Executable_Serialize(cython.address(arguments))
+        )
         destroy_executable(unloaded)
         if status != 0:
             raise_last_error("PJRT_Executable_Serialize")  # pragma: no cover
