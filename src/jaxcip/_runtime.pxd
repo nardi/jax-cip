@@ -49,7 +49,6 @@ cdef long error_count
 
 cdef double now() noexcept nogil
 cdef int check(PJRT_Error* error) noexcept nogil
-cdef bint aliasing_available() noexcept nogil
 cdef PJRT_Buffer* alias_buffer(double* data, int64_t size) noexcept nogil
 cdef void destroy_buffer(PJRT_Buffer* buffer) noexcept nogil
 cdef double* aligned_doubles(int count) noexcept nogil

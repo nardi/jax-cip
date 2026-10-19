@@ -1,0 +1,11 @@
+STATISTICS
+  Problem name     : camel
+OBJECTIVE
+  Sense            : minimize
+VARIABLES
+  [continuous] <x0>: obj=0, original bounds=[-3,3]
+  [continuous] <x1>: obj=0, original bounds=[-2,2]
+  [continuous] <t>: obj=1, original bounds=[-100,1000]
+CONSTRAINTS
+  [nonlinear] <camel>: (4 - 2.1*<x0>^2 + <x0>^4/3)*<x0>^2 + <x0>*<x1> + (-4 + 4*<x1>^2)*<x1>^2 - <t> <= 0;
+END

@@ -5,6 +5,7 @@ this file for why this exists.
 
 Usage: dll_to_lib.py <dll-path> <output-lib-path> <machine>
 """
+
 import os
 import re
 import subprocess

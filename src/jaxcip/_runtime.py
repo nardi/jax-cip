@@ -128,18 +128,10 @@ def check(error: cython.pointer[PJRT_Error]) -> cython.int:
 @cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
-def aliasing_available() -> cython.bint:
-    """Returns whether buffers created with `alias_buffer` share host memory."""
-    return can_alias
-
-
-@cython.cfunc
-@cython.nogil
-@cython.exceptval(check=False)
 def await_event(event: cython.pointer[PJRT_Event]) -> cython.int:
     """Waits for an event and frees it, returning -1 on error."""
     if event == cython.NULL:
-        return 0
+        return 0  # pragma: no cover
     wait: PJRT_Event_Await_Args
     memset(cython.address(wait), 0, cython.sizeof(wait))
     wait.struct_size = PJRT_Event_Await_Args_STRUCT_SIZE
@@ -202,7 +194,7 @@ def buffer_from_host(
             PJRT_HostBufferSemantics_kImmutableOnlyDuringCall
         )
     if check(api.PJRT_Client_BufferFromHostBuffer(cython.address(arguments))) != 0:
-        return cython.NULL
+        return cython.NULL  # pragma: no cover
 
     # An aliased buffer reports its host memory as done only when the buffer is freed, so the
     # event is not awaited. A copied buffer's event is already complete when the call returns.
@@ -220,7 +212,7 @@ def buffer_from_host(
 def alias_buffer(data: cython.p_double, size: int64_t) -> cython.pointer[PJRT_Buffer]:
     """Returns a buffer that shares `size` doubles of host memory, or NULL without aliasing."""
     if not can_alias:
-        return cython.NULL
+        return cython.NULL  # pragma: no cover
     return buffer_from_host(data, size, True)
 
 
@@ -254,7 +246,7 @@ def execute(
     each output is copied back. Outputs with a NULL destination are dropped.
     """
     if program.handle == cython.NULL:
-        return -1
+        return -1  # pragma: no cover
     use_aliases: cython.bint = zero_copy and can_alias
     arguments: cython.pointer[PJRT_Buffer][MAX_INPUTS]
     created: cython.pointer[PJRT_Buffer][MAX_INPUTS]
@@ -269,8 +261,8 @@ def execute(
             )
             arguments[index] = created[index]
             if created[index] == cython.NULL:
-                release_buffers(created, index)
-                return -1
+                release_buffers(created, index)  # pragma: no cover
+                return -1  # pragma: no cover
 
     results: cython.pointer[PJRT_Buffer][MAX_OUTPUTS]
     results[0] = cython.NULL

@@ -1,0 +1,18 @@
+STATISTICS
+  Problem name     : minlp
+OBJECTIVE
+  Sense            : minimize
+VARIABLES
+  [continuous] <x0>: obj=0, original bounds=[0.1,4]
+  [continuous] <x1>: obj=0, original bounds=[0.1,4]
+  [integer] <y0>: obj=0, original bounds=[0,3]
+  [integer] <y1>: obj=0, original bounds=[0,3]
+  [binary] <y2>: obj=0, original bounds=[0,1]
+  [continuous] <t>: obj=1, original bounds=[-100,100]
+CONSTRAINTS
+  [nonlinear] <objective>: (<x0> - 2)^2 + exp(0.5*<x1>) - 3*log(<x0> + <x1>) + <y0>*<x1> - 1.5*<y1> + 2*<y2> - <t> <= 0;
+  [nonlinear] <product>: <x0>*<x1> + <y0> - <y1> >= 1;
+  [nonlinear] <exponential>: exp(<x0>/2) + <y2>*<x1> <= 4;
+  [linear] <integers>: <y0>[I] + <y1>[I] + <y2>[B] <= 4;
+  [linear] <sum>: <x0>[C] + <x1>[C] <= 5;
+END

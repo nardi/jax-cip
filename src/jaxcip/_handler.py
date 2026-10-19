@@ -283,8 +283,9 @@ def read_child_values(
     index: cython.int
     for index in range(SCIPexprGetNChildren(expr)):
         destination[index] = SCIPexprGetEvalValue(children[index])
+        # The children are variable expressions, whose values are never invalid.
         if destination[index] == SCIP_INVALID:
-            return False
+            return False  # pragma: no cover
     return True
 
 
@@ -306,7 +307,7 @@ def eval_callback(
     function.statistics.calls[CALLBACK_EVAL] += 1
     val[0] = SCIP_INVALID
     if not read_child_values(expr, x):
-        return SCIP_OKAY
+        return SCIP_OKAY  # pragma: no cover
     if data.switches.caches:
         for index in range(data.value_count):
             if same(x, data.value_keys + index * n, n):
@@ -366,8 +367,9 @@ def ensure_gradient(
         )
         != 0
     ):
-        data.gradient_valid = False
-        return False
+        # A program fails to run only if the plugin fails.
+        data.gradient_valid = False  # pragma: no cover
+        return False  # pragma: no cover
     memcpy(data.gradient_key, x, n * cython.sizeof(cython.double))
     data.gradient_value = value
     data.gradient_valid = all_finite(cython.address(value), 1) and all_finite(
@@ -419,8 +421,9 @@ def read_child_dots(
     index: cython.int
     for index in range(SCIPexprGetNChildren(expr)):
         destination[index] = SCIPexprGetDot(children[index])
+        # The children are variable expressions, whose derivatives are never invalid.
         if destination[index] == SCIP_INVALID:
-            return False
+            return False  # pragma: no cover
     return True
 
 
@@ -581,7 +584,8 @@ def inteval_callback(
         )
         != 0
     ):
-        return SCIP_OKAY
+        # A program fails to run only if the plugin fails.
+        return SCIP_OKAY  # pragma: no cover
     set_interval(interval, result[0], result[1])
     if data.switches.caches:
         index = data.bounds_next
@@ -823,8 +827,9 @@ def monotonicity_callback(
             )
             != 0
         ):
-            data.monotonicity_valid = False
-            return SCIP_OKAY
+            # A program fails to run only if the plugin fails.
+            data.monotonicity_valid = False  # pragma: no cover
+            return SCIP_OKAY  # pragma: no cover
         memcpy(data.monotonicity_key, lower, n * cython.sizeof(cython.double))
         memcpy(data.monotonicity_key + n, upper, n * cython.sizeof(cython.double))
         data.monotonicity_valid = True
