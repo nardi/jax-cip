@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Hwloc-aarch64-linux-musl
+source_url = https://github.com/JuliaBinaryWrappers/Hwloc_jll.jl/releases/download/Hwloc-v2.15.0+0/Hwloc.v2.15.0.aarch64-linux-musl.tar.gz
+source_filename = Hwloc.v2.15.0.aarch64-linux-musl.tar.gz
+source_hash = 409bc27dcd57c91ee3e8fa5d9339c534eced01296e91c7a750dcd09e960e1817
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Hwloc-aarch64-linux-musl

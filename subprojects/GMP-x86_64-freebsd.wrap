@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = GMP-x86_64-freebsd
+source_url = https://github.com/JuliaBinaryWrappers/GMP_jll.jl/releases/download/GMP-v6.3.0+5/GMP.v6.3.0.x86_64-unknown-freebsd.tar.gz
+source_filename = GMP.v6.3.0.x86_64-unknown-freebsd.tar.gz
+source_hash = 7e6f8e5dc9a9b9b71298c9083e31fa4ddda1c249538d15328259a0c70e937fe6
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = GMP-x86_64-freebsd

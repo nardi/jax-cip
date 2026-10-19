@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = GMP-armv6l-linux-musleabihf-cxx11
+source_url = https://github.com/JuliaBinaryWrappers/GMP_jll.jl/releases/download/GMP-v6.3.0+5/GMP.v6.3.0.armv6l-linux-musleabihf-cxx11.tar.gz
+source_filename = GMP.v6.3.0.armv6l-linux-musleabihf-cxx11.tar.gz
+source_hash = e107800faa4cd99ca8d7eb983e9541283a99f725c5f756e055d856688d2a71d4
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = GMP-armv6l-linux-musleabihf-cxx11

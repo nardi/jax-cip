@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Libiconv-armv7l-linux-musleabihf
+source_url = https://github.com/JuliaBinaryWrappers/Libiconv_jll.jl/releases/download/Libiconv-v1.18.0+0/Libiconv.v1.18.0.armv7l-linux-musleabihf.tar.gz
+source_filename = Libiconv.v1.18.0.armv7l-linux-musleabihf.tar.gz
+source_hash = 819435ee5d9362d33151afc04d04da7634a6e24cce4fd58c82ed416c612df40b
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Libiconv-armv7l-linux-musleabihf

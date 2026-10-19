@@ -1,0 +1,14 @@
+# meson-jll: name=ASL version=0.1.5+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = ASL
+source_filename = _meson-jll-empty.tar
+patch_directory = ASL
+
+[provide]
+# Makes a plain dependency('ASL') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+ASL = asl_dep

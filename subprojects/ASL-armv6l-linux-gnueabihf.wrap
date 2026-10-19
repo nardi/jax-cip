@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = ASL-armv6l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/ASL_jll.jl/releases/download/ASL-v0.1.5+0/ASL.v0.1.5.armv6l-linux-gnueabihf.tar.gz
+source_filename = ASL.v0.1.5.armv6l-linux-gnueabihf.tar.gz
+source_hash = 3937fdfbcfb1e68fa3374de07a835f38d3a9c81909337fe45f730aa71d26653f
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = ASL-armv6l-linux-gnueabihf

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = MPFR-powerpc64le-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/MPFR_jll.jl/releases/download/MPFR-v4.2.2+1/MPFR.v4.2.2.powerpc64le-linux-gnu.tar.gz
+source_filename = MPFR.v4.2.2.powerpc64le-linux-gnu.tar.gz
+source_hash = 57a09f5a60e1cf53faa240307577a8db8fc38bcc1ea7069deefa24e6824ab5ea
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = MPFR-powerpc64le-linux-gnu

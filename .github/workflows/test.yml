@@ -1,0 +1,74 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up
+        uses: ./.github/actions/setup
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run tests
+        env:
+          COVERAGE_FILE: .coverage.${{ matrix.python-version }}
+        run: uv run --python ${{ matrix.python-version }} pytest --cov --cov-fail-under=0
+
+      - name: Upload coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: .coverage.${{ matrix.python-version }}
+          include-hidden-files: true
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: pytest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The coverage report of the Cython modules reads the C files that the build
+      # places next to their sources, so the project is built here as well.
+      - name: Set up
+        uses: ./.github/actions/setup
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Combine coverage data
+        run: uv run coverage combine
+
+      - name: Coverage report
+        run: uv run coverage report
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up
+        uses: ./.github/actions/setup
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Check formatting
+        run: uv run ruff format --check
+
+      - name: Type check
+        run: uv run ty check

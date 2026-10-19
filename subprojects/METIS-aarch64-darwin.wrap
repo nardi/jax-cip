@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = METIS-aarch64-darwin
+source_url = https://github.com/JuliaBinaryWrappers/METIS_jll.jl/releases/download/METIS-v5.1.4+0/METIS.v5.1.4.aarch64-apple-darwin.tar.gz
+source_filename = METIS.v5.1.4.aarch64-apple-darwin.tar.gz
+source_hash = dcc847c89bb696db1839d481576c60b4b7c58174f5f188e2a145d39a0ccfbea3
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = METIS-aarch64-darwin

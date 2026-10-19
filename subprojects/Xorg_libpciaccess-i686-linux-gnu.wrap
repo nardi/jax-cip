@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Xorg_libpciaccess-i686-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Xorg_libpciaccess_jll.jl/releases/download/Xorg_libpciaccess-v0.19.0+0/Xorg_libpciaccess.v0.19.0.i686-linux-gnu.tar.gz
+source_filename = Xorg_libpciaccess.v0.19.0.i686-linux-gnu.tar.gz
+source_hash = 0d2af53418c54826f79820b6402b604010331b95507d480c9403133eb929645f
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Xorg_libpciaccess-i686-linux-gnu

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Xorg_libpciaccess-powerpc64le-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Xorg_libpciaccess_jll.jl/releases/download/Xorg_libpciaccess-v0.19.0+0/Xorg_libpciaccess.v0.19.0.powerpc64le-linux-gnu.tar.gz
+source_filename = Xorg_libpciaccess.v0.19.0.powerpc64le-linux-gnu.tar.gz
+source_hash = 97a8b2e0de85fd1555dd19e915c337e4e91aa3cf8a9cc72c6c8e20ec1832e793
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Xorg_libpciaccess-powerpc64le-linux-gnu

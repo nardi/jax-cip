@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Zlib-i686-windows
+source_url = https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v1.3.2+0/Zlib.v1.3.2.i686-w64-mingw32.tar.gz
+source_filename = Zlib.v1.3.2.i686-w64-mingw32.tar.gz
+source_hash = 8c24731eaff82e1d6b2a596ab917b799eddb5bdcfcb3ca1d317820abdf3d7d87
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Zlib-i686-windows

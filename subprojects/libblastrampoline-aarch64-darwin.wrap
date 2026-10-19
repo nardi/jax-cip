@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = libblastrampoline-aarch64-darwin
+source_url = https://github.com/JuliaBinaryWrappers/libblastrampoline_jll.jl/releases/download/libblastrampoline-v5.16.0+0/libblastrampoline.v5.16.0.aarch64-apple-darwin.tar.gz
+source_filename = libblastrampoline.v5.16.0.aarch64-apple-darwin.tar.gz
+source_hash = f7e337908a2f054db2e2ec0478deefd096b44c3fad1601d78821bb68783fa001
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = libblastrampoline-aarch64-darwin

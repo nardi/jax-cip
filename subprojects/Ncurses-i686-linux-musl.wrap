@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Ncurses-i686-linux-musl
+source_url = https://github.com/JuliaBinaryWrappers/Ncurses_jll.jl/releases/download/Ncurses-v6.6.0+2/Ncurses.v6.6.0.i686-linux-musl.tar.gz
+source_filename = Ncurses.v6.6.0.i686-linux-musl.tar.gz
+source_hash = 5ab7967ef7bea5056c8a481e08382fe7bf2a5b902d0fe8dd6651dad057140000
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Ncurses-i686-linux-musl

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = METIS-x86_64-linux-musl
+source_url = https://github.com/JuliaBinaryWrappers/METIS_jll.jl/releases/download/METIS-v5.1.4+0/METIS.v5.1.4.x86_64-linux-musl.tar.gz
+source_filename = METIS.v5.1.4.x86_64-linux-musl.tar.gz
+source_hash = 0d57d2433d50c4bd3fc9301496329e9118269d9a52be15b8cbf40d54d08ece53
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = METIS-x86_64-linux-musl

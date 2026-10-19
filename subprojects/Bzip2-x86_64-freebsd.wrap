@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Bzip2-x86_64-freebsd
+source_url = https://github.com/JuliaBinaryWrappers/Bzip2_jll.jl/releases/download/Bzip2-v1.0.9+0/Bzip2.v1.0.9.x86_64-unknown-freebsd.tar.gz
+source_filename = Bzip2.v1.0.9.x86_64-unknown-freebsd.tar.gz
+source_hash = 13a62419f88261c2f078db0eb96e1fa85ad41688e9f729474ce151d798042950
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Bzip2-x86_64-freebsd

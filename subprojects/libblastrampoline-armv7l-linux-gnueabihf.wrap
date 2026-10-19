@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = libblastrampoline-armv7l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/libblastrampoline_jll.jl/releases/download/libblastrampoline-v5.16.0+0/libblastrampoline.v5.16.0.armv7l-linux-gnueabihf.tar.gz
+source_filename = libblastrampoline.v5.16.0.armv7l-linux-gnueabihf.tar.gz
+source_hash = 415b46e706ab8a2ff47c61ffd05b753d728f848aae048b871c8d2419332b7dc6
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = libblastrampoline-armv7l-linux-gnueabihf

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = MPFR-i686-windows
+source_url = https://github.com/JuliaBinaryWrappers/MPFR_jll.jl/releases/download/MPFR-v4.2.2+1/MPFR.v4.2.2.i686-w64-mingw32.tar.gz
+source_filename = MPFR.v4.2.2.i686-w64-mingw32.tar.gz
+source_hash = ae7ee5076525510c2fcf3b327a3776e523e7f6835d54ecf4436e8df94a827501
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = MPFR-i686-windows

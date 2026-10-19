@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = METIS-powerpc64le-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/METIS_jll.jl/releases/download/METIS-v5.1.4+0/METIS.v5.1.4.powerpc64le-linux-gnu.tar.gz
+source_filename = METIS.v5.1.4.powerpc64le-linux-gnu.tar.gz
+source_hash = 8ca832ea632607000408fa892ce0c0cc76d59bc71ecae5da1e020fc4be2ac63e
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = METIS-powerpc64le-linux-gnu

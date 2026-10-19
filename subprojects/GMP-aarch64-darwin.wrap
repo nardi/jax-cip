@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = GMP-aarch64-darwin
+source_url = https://github.com/JuliaBinaryWrappers/GMP_jll.jl/releases/download/GMP-v6.3.0+5/GMP.v6.3.0.aarch64-apple-darwin.tar.gz
+source_filename = GMP.v6.3.0.aarch64-apple-darwin.tar.gz
+source_hash = 0ae3713894c68fa64884742a658f1f381ebf8757f9eb89118503f0428e59607b
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = GMP-aarch64-darwin

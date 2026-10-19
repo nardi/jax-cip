@@ -1,0 +1,141 @@
+version = 1
+
+[roots]
+OpenBLAS32 = "0.3.34+0"
+SCIP = "1000.100.0+0"
+
+[[package]]
+name = "ASL"
+version = "0.1.5+0"
+dependencies = []
+
+[[package]]
+name = "Bzip2"
+version = "1.0.9+0"
+dependencies = []
+
+[[package]]
+name = "CompilerSupportLibraries"
+version = "1.5.7+0"
+dependencies = []
+
+[[package]]
+name = "GMP"
+version = "6.3.0+5"
+dependencies = []
+
+[[package]]
+name = "Hwloc"
+version = "2.15.0+0"
+dependencies = [
+    "XML2",
+    "Xorg_libpciaccess",
+]
+
+[[package]]
+name = "Ipopt"
+version = "300.1400.2000+1"
+dependencies = [
+    "libblastrampoline",
+    "ASL",
+    "SPRAL",
+    "MUMPS_seq",
+    "CompilerSupportLibraries",
+]
+
+[[package]]
+name = "Libiconv"
+version = "1.18.0+0"
+dependencies = []
+
+[[package]]
+name = "METIS"
+version = "5.1.4+0"
+dependencies = []
+
+[[package]]
+name = "MPFR"
+version = "4.2.2+1"
+dependencies = ["GMP"]
+
+[[package]]
+name = "MUMPS_seq"
+version = "500.900.100+0"
+dependencies = [
+    "METIS",
+    "libblastrampoline",
+    "CompilerSupportLibraries",
+]
+
+[[package]]
+name = "Ncurses"
+version = "6.6.0+2"
+dependencies = []
+
+[[package]]
+name = "OpenBLAS32"
+version = "0.3.34+0"
+dependencies = [
+    "CompilerSupportLibraries",
+    "libblastrampoline",
+]
+
+[[package]]
+name = "Readline"
+version = "8.3.3+0"
+dependencies = ["Ncurses"]
+
+[[package]]
+name = "SCIP"
+version = "1000.100.0+0"
+dependencies = [
+    "MPFR",
+    "boost",
+    "Ipopt",
+    "GMP",
+    "Zlib",
+    "CompilerSupportLibraries",
+    "Readline",
+    "Bzip2",
+]
+
+[[package]]
+name = "SPRAL"
+version = "2025.9.18+1"
+dependencies = [
+    "METIS",
+    "CompilerSupportLibraries",
+    "libblastrampoline",
+    "Hwloc",
+]
+
+[[package]]
+name = "XML2"
+version = "2.15.4+0"
+dependencies = [
+    "Libiconv",
+    "Zlib",
+]
+
+[[package]]
+name = "Xorg_libpciaccess"
+version = "0.19.0+0"
+dependencies = ["Zlib"]
+
+[[package]]
+name = "Zlib"
+version = "1.3.2+0"
+dependencies = []
+
+[[package]]
+name = "boost"
+version = "1.87.0+0"
+dependencies = [
+    "Bzip2",
+    "Zlib",
+]
+
+[[package]]
+name = "libblastrampoline"
+version = "5.16.0+0"
+dependencies = []

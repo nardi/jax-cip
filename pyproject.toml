@@ -1,0 +1,67 @@
+[project]
+name = "jaxcip"
+version = "0.1.0"
+description = "JAX functions as nonlinear expressions in the SCIP optimization solver"
+readme = "README.md"
+authors = [{ name = "Nardi Lam", email = "mail@nardilam.nl" }]
+requires-python = ">=3.11"
+dependencies = [
+    "jax>=0.10",
+    "jaxormick>=0.0.1",
+    "jaxtyping>=0.2",
+    "numpy>=1.26",
+]
+
+[build-system]
+requires = ["meson-python>=0.18", "meson>=1.8", "cython>=3.1"]
+build-backend = "mesonpy"
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6",
+    "lxml>=5",
+    "markdown-pytest>=0.6.6",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=0.27",
+    "pytest>=9.1.0",
+    "pytest-benchmark>=5",
+    "pytest-cov>=7",
+    "pytest-xdist>=3",
+    "ruff>=0.15.17",
+    "ty>=0.0.59",
+]
+# An editable meson-python install rebuilds the extension modules on import, so the
+# build tools have to live in the environment itself rather than in an isolated one.
+build = ["meson-python>=0.18", "meson>=1.8", "ninja>=1.11", "cython>=3.1"]
+
+[tool.uv]
+default-groups = ["build", "dev"]
+no-build-isolation-package = ["jaxcip"]
+# Development builds trace lines in the Cython modules, so their coverage is measured as
+# well. Benchmarks override this with `-C setup-args=-Dcoverage=false`.
+config-settings = { setup-args = "-Dcoverage=true" }
+
+[tool.uv.sources]
+jaxormick = { git = "https://github.com/nardi/jaxormick", rev = "b2a8399e7c01f61a53635fd8bc8af1df05c7a069" }
+
+[tool.pytest.ini_options]
+# The markdown docs and the README are collected by markdown-pytest, which runs code
+# blocks marked with a `<!-- name: test_... -->` comment.
+testpaths = ["tests", "docs", "README.md"]
+# Benchmarks and the MINLPLib suite run separately, so a plain `pytest` stays fast.
+addopts = "--benchmark-skip"
+markers = ["minlplib: solves MINLPLib instances, selected with `--minlplib`"]
+
+[tool.coverage.run]
+branch = true
+source = ["jaxcip"]
+plugins = ["Cython.Coverage"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+exclude_also = ["if TYPE_CHECKING:", "raise AssertionError", "@overload"]
+
+[tool.ruff.lint]
+ignore = ["F722"]
+select = ["E4", "E7", "E9", "F", "I"]

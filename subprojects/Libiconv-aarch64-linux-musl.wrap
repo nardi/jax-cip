@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Libiconv-aarch64-linux-musl
+source_url = https://github.com/JuliaBinaryWrappers/Libiconv_jll.jl/releases/download/Libiconv-v1.18.0+0/Libiconv.v1.18.0.aarch64-linux-musl.tar.gz
+source_filename = Libiconv.v1.18.0.aarch64-linux-musl.tar.gz
+source_hash = 38577cdede434f06d186fc108c6864f489459e19338855250ee7ee11dd483d06
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Libiconv-aarch64-linux-musl

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = SPRAL-powerpc64le-linux-gnu-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/SPRAL_jll.jl/releases/download/SPRAL-v2025.9.18+1/SPRAL.v2025.9.18.powerpc64le-linux-gnu-libgfortran5.tar.gz
+source_filename = SPRAL.v2025.9.18.powerpc64le-linux-gnu-libgfortran5.tar.gz
+source_hash = 35945b024cfa5172cf9fdd6c2f4f40adf10193d1625978d9ed4842f34d958e95
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = SPRAL-powerpc64le-linux-gnu-libgfortran5.0.0

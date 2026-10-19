@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = SCIP-i686-windows-cxx11
+source_url = https://github.com/JuliaBinaryWrappers/SCIP_jll.jl/releases/download/SCIP-v1000.100.0+0/SCIP.v1000.100.0.i686-w64-mingw32-cxx11.tar.gz
+source_filename = SCIP.v1000.100.0.i686-w64-mingw32-cxx11.tar.gz
+source_hash = 69f7b4b1b22ea62b7f5a4eb8127b861bf80e66dd111f48c7a0accedf52973177
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = SCIP-i686-windows-cxx11

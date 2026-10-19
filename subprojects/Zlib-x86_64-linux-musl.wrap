@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Zlib-x86_64-linux-musl
+source_url = https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v1.3.2+0/Zlib.v1.3.2.x86_64-linux-musl.tar.gz
+source_filename = Zlib.v1.3.2.x86_64-linux-musl.tar.gz
+source_hash = 721cc44d92f2dbaee507f8fc9b05b242f5d3aafb08e2b5fecbfbe0d31b66fafc
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Zlib-x86_64-linux-musl

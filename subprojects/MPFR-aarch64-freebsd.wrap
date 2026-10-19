@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = MPFR-aarch64-freebsd
+source_url = https://github.com/JuliaBinaryWrappers/MPFR_jll.jl/releases/download/MPFR-v4.2.2+1/MPFR.v4.2.2.aarch64-unknown-freebsd.tar.gz
+source_filename = MPFR.v4.2.2.aarch64-unknown-freebsd.tar.gz
+source_hash = 0dcc38b04994bdccb1c6f2f8136b6d4bb2fc31bc42afcfade846bf7dd5d87cc7
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = MPFR-aarch64-freebsd

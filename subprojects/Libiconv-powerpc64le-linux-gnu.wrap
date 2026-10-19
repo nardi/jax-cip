@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Libiconv-powerpc64le-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Libiconv_jll.jl/releases/download/Libiconv-v1.18.0+0/Libiconv.v1.18.0.powerpc64le-linux-gnu.tar.gz
+source_filename = Libiconv.v1.18.0.powerpc64le-linux-gnu.tar.gz
+source_hash = e1b9aab6a2f6508c45486075265cfdf8ef61b5ba9234537d938060c6020a3cde
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Libiconv-powerpc64le-linux-gnu

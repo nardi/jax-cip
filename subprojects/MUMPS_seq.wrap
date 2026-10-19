@@ -1,0 +1,14 @@
+# meson-jll: name=MUMPS_seq version=500.900.100+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = MUMPS_seq
+source_filename = _meson-jll-empty.tar
+patch_directory = MUMPS_seq
+
+[provide]
+# Makes a plain dependency('MUMPS_seq') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+MUMPS_seq = mumps_seq_dep

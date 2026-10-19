@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = XML2-powerpc64le-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/XML2_jll.jl/releases/download/XML2-v2.15.4+0/XML2.v2.15.4.powerpc64le-linux-gnu.tar.gz
+source_filename = XML2.v2.15.4.powerpc64le-linux-gnu.tar.gz
+source_hash = 52ffcd3c5f26424e42726441be8e5747db9aa86583626b4d005d7de98096747c
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = XML2-powerpc64le-linux-gnu

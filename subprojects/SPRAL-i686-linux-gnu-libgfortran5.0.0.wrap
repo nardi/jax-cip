@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = SPRAL-i686-linux-gnu-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/SPRAL_jll.jl/releases/download/SPRAL-v2025.9.18+1/SPRAL.v2025.9.18.i686-linux-gnu-libgfortran5.tar.gz
+source_filename = SPRAL.v2025.9.18.i686-linux-gnu-libgfortran5.tar.gz
+source_hash = f289f0795fdc188f747293b11ae1add211a4fcf11055cfedf9d7bf51f6876730
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = SPRAL-i686-linux-gnu-libgfortran5.0.0

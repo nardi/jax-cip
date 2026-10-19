@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = XML2-aarch64-darwin
+source_url = https://github.com/JuliaBinaryWrappers/XML2_jll.jl/releases/download/XML2-v2.15.4+0/XML2.v2.15.4.aarch64-apple-darwin.tar.gz
+source_filename = XML2.v2.15.4.aarch64-apple-darwin.tar.gz
+source_hash = d51e912b9c06142a910b500c55f87dc2476babbc7fdd64a8187d790640d02881
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = XML2-aarch64-darwin

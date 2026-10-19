@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = XML2-i686-windows
+source_url = https://github.com/JuliaBinaryWrappers/XML2_jll.jl/releases/download/XML2-v2.15.4+0/XML2.v2.15.4.i686-w64-mingw32.tar.gz
+source_filename = XML2.v2.15.4.i686-w64-mingw32.tar.gz
+source_hash = 7b9e9c453b3402288b7b620c52cc293c033c45f57df4ae7e45a96739365ca591
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = XML2-i686-windows

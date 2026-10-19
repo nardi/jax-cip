@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = METIS-x86_64-freebsd
+source_url = https://github.com/JuliaBinaryWrappers/METIS_jll.jl/releases/download/METIS-v5.1.4+0/METIS.v5.1.4.x86_64-unknown-freebsd.tar.gz
+source_filename = METIS.v5.1.4.x86_64-unknown-freebsd.tar.gz
+source_hash = aea83a77562bf9d389d0514bde3e2324fb8dd8299cc8e59d54e184abd845c261
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = METIS-x86_64-freebsd

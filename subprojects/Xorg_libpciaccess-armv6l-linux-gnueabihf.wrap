@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Xorg_libpciaccess-armv6l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/Xorg_libpciaccess_jll.jl/releases/download/Xorg_libpciaccess-v0.19.0+0/Xorg_libpciaccess.v0.19.0.armv6l-linux-gnueabihf.tar.gz
+source_filename = Xorg_libpciaccess.v0.19.0.armv6l-linux-gnueabihf.tar.gz
+source_hash = 0e36be80dd091a33c4c17a54e41a987b89494cd8488c5475375fcb3cedfa08e1
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Xorg_libpciaccess-armv6l-linux-gnueabihf

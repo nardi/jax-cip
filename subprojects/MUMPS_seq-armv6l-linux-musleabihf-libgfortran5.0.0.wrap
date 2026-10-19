@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = MUMPS_seq-armv6l-linux-musleabihf-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/MUMPS_seq_jll.jl/releases/download/MUMPS_seq-v500.900.100+0/MUMPS_seq.v500.900.100.armv6l-linux-musleabihf-libgfortran5.tar.gz
+source_filename = MUMPS_seq.v500.900.100.armv6l-linux-musleabihf-libgfortran5.tar.gz
+source_hash = 1ee400dad4085150a070a45d5d13fcf422176e29b0ead7abd6915b4258167095
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = MUMPS_seq-armv6l-linux-musleabihf-libgfortran5.0.0

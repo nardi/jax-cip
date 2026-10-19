@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = GMP-x86_64-windows-cxx11
+source_url = https://github.com/JuliaBinaryWrappers/GMP_jll.jl/releases/download/GMP-v6.3.0+5/GMP.v6.3.0.x86_64-w64-mingw32-cxx11.tar.gz
+source_filename = GMP.v6.3.0.x86_64-w64-mingw32-cxx11.tar.gz
+source_hash = 052278c721292441492606cce856379212a9f243bd0776ee2e3b9a33192435de
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = GMP-x86_64-windows-cxx11

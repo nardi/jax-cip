@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Xorg_libpciaccess-x86_64-linux-musl
+source_url = https://github.com/JuliaBinaryWrappers/Xorg_libpciaccess_jll.jl/releases/download/Xorg_libpciaccess-v0.19.0+0/Xorg_libpciaccess.v0.19.0.x86_64-linux-musl.tar.gz
+source_filename = Xorg_libpciaccess.v0.19.0.x86_64-linux-musl.tar.gz
+source_hash = 0b3cf71cf5fd680950f83944978e005e4de439ea7693a6dbad1039c4ac62fca0
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Xorg_libpciaccess-x86_64-linux-musl

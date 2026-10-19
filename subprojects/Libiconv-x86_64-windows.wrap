@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Libiconv-x86_64-windows
+source_url = https://github.com/JuliaBinaryWrappers/Libiconv_jll.jl/releases/download/Libiconv-v1.18.0+0/Libiconv.v1.18.0.x86_64-w64-mingw32.tar.gz
+source_filename = Libiconv.v1.18.0.x86_64-w64-mingw32.tar.gz
+source_hash = c4fb845ad822d78e4bf186f7c9976fddfc523a97cd9ecc03a6fda554fa89b02e
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Libiconv-x86_64-windows

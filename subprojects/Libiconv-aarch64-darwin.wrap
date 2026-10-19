@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Libiconv-aarch64-darwin
+source_url = https://github.com/JuliaBinaryWrappers/Libiconv_jll.jl/releases/download/Libiconv-v1.18.0+0/Libiconv.v1.18.0.aarch64-apple-darwin.tar.gz
+source_filename = Libiconv.v1.18.0.aarch64-apple-darwin.tar.gz
+source_hash = 8c936e4c569645ad9840a5777a7e9280b7271ec38f6cc08c19bee301ebb97276
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Libiconv-aarch64-darwin

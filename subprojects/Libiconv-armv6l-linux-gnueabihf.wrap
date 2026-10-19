@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Libiconv-armv6l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/Libiconv_jll.jl/releases/download/Libiconv-v1.18.0+0/Libiconv.v1.18.0.armv6l-linux-gnueabihf.tar.gz
+source_filename = Libiconv.v1.18.0.armv6l-linux-gnueabihf.tar.gz
+source_hash = 6a6259c3846c2485430b22ee2757776ca9370721d9feff41a4cb972085b79ec9
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Libiconv-armv6l-linux-gnueabihf

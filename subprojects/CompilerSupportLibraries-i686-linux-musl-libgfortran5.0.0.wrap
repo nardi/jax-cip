@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = CompilerSupportLibraries-i686-linux-musl-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/CompilerSupportLibraries_jll.jl/releases/download/CompilerSupportLibraries-v1.5.7+0/CompilerSupportLibraries.v1.5.7.i686-linux-musl-libgfortran5.tar.gz
+source_filename = CompilerSupportLibraries.v1.5.7.i686-linux-musl-libgfortran5.tar.gz
+source_hash = 517cba318beeb37593ae1a75ec1153ab3138e95ff44454305fcabe0259099ad9
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = CompilerSupportLibraries-i686-linux-musl-libgfortran5.0.0

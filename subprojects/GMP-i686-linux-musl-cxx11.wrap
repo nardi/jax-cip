@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = GMP-i686-linux-musl-cxx11
+source_url = https://github.com/JuliaBinaryWrappers/GMP_jll.jl/releases/download/GMP-v6.3.0+5/GMP.v6.3.0.i686-linux-musl-cxx11.tar.gz
+source_filename = GMP.v6.3.0.i686-linux-musl-cxx11.tar.gz
+source_hash = 8437e377cf27d8b4dae24515edaa5930b984aab85c49d4151c738620ab44479b
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = GMP-i686-linux-musl-cxx11

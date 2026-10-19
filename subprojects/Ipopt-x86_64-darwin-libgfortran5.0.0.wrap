@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Ipopt-x86_64-darwin-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/Ipopt_jll.jl/releases/download/Ipopt-v300.1400.2000+1/Ipopt.v300.1400.2000.x86_64-apple-darwin-libgfortran5.tar.gz
+source_filename = Ipopt.v300.1400.2000.x86_64-apple-darwin-libgfortran5.tar.gz
+source_hash = 7fd360d383313f62241f34d21450225001da4a43691bfe256716556aa63e8a5d
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Ipopt-x86_64-darwin-libgfortran5.0.0

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = OpenBLAS32-x86_64-darwin-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/OpenBLAS32_jll.jl/releases/download/OpenBLAS32-v0.3.34+0/OpenBLAS32.v0.3.34.x86_64-apple-darwin-libgfortran5.tar.gz
+source_filename = OpenBLAS32.v0.3.34.x86_64-apple-darwin-libgfortran5.tar.gz
+source_hash = 8f377eb101c615b26daf36c61d56e65df7f561d66d7d9bd1d5a19704042fa5d1
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = OpenBLAS32-x86_64-darwin-libgfortran5.0.0

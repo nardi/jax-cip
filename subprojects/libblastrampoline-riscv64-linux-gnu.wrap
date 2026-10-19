@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = libblastrampoline-riscv64-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/libblastrampoline_jll.jl/releases/download/libblastrampoline-v5.16.0+0/libblastrampoline.v5.16.0.riscv64-linux-gnu.tar.gz
+source_filename = libblastrampoline.v5.16.0.riscv64-linux-gnu.tar.gz
+source_hash = 7ecb3ddccab82ed120ab7ab06fde2269287102717fd970fcb15147b3ace9fbdc
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = libblastrampoline-riscv64-linux-gnu

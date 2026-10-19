@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = ASL-x86_64-windows
+source_url = https://github.com/JuliaBinaryWrappers/ASL_jll.jl/releases/download/ASL-v0.1.5+0/ASL.v0.1.5.x86_64-w64-mingw32.tar.gz
+source_filename = ASL.v0.1.5.x86_64-w64-mingw32.tar.gz
+source_hash = 70250814e807364ffa60edb0ceb7dd5f602599b3d8a54813b98d6d9e5a601a06
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = ASL-x86_64-windows

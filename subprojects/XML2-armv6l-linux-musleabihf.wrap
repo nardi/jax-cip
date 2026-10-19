@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = XML2-armv6l-linux-musleabihf
+source_url = https://github.com/JuliaBinaryWrappers/XML2_jll.jl/releases/download/XML2-v2.15.4+0/XML2.v2.15.4.armv6l-linux-musleabihf.tar.gz
+source_filename = XML2.v2.15.4.armv6l-linux-musleabihf.tar.gz
+source_hash = 7b62a3676d7dcfb86909d9182d4e94cdcc607f2673031ffbdfd9dd78e7db307f
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = XML2-armv6l-linux-musleabihf

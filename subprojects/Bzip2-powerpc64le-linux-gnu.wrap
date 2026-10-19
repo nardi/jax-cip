@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Bzip2-powerpc64le-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Bzip2_jll.jl/releases/download/Bzip2-v1.0.9+0/Bzip2.v1.0.9.powerpc64le-linux-gnu.tar.gz
+source_filename = Bzip2.v1.0.9.powerpc64le-linux-gnu.tar.gz
+source_hash = ebab7a0c84756d755b9311f45ded214c2acb32a64f8b3c517061dbb00ccee914
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Bzip2-powerpc64le-linux-gnu

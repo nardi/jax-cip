@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Ipopt-x86_64-windows-cxx11-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/Ipopt_jll.jl/releases/download/Ipopt-v300.1400.2000+1/Ipopt.v300.1400.2000.x86_64-w64-mingw32-libgfortran5-cxx11.tar.gz
+source_filename = Ipopt.v300.1400.2000.x86_64-w64-mingw32-libgfortran5-cxx11.tar.gz
+source_hash = 6ef9b095d3b7f824f4ab1b4c5cb91d30feac447964a01d262f3525043102a0a0
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Ipopt-x86_64-windows-cxx11-libgfortran5.0.0

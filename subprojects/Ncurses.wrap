@@ -1,0 +1,14 @@
+# meson-jll: name=Ncurses version=6.6.0+2
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = Ncurses
+source_filename = _meson-jll-empty.tar
+patch_directory = Ncurses
+
+[provide]
+# Makes a plain dependency('Ncurses') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+Ncurses = ncurses_dep

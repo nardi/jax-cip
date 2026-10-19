@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = CompilerSupportLibraries-powerpc64le-linux-gnu-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/CompilerSupportLibraries_jll.jl/releases/download/CompilerSupportLibraries-v1.5.7+0/CompilerSupportLibraries.v1.5.7.powerpc64le-linux-gnu-libgfortran5.tar.gz
+source_filename = CompilerSupportLibraries.v1.5.7.powerpc64le-linux-gnu-libgfortran5.tar.gz
+source_hash = 1d25006130fe4305f9e79953eafe5b2d61d9d3b3185c6305d63129378218ebb2
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = CompilerSupportLibraries-powerpc64le-linux-gnu-libgfortran5.0.0

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = boost-aarch64-linux-gnu-cxx03
+source_url = https://github.com/JuliaBinaryWrappers/boost_jll.jl/releases/download/boost-v1.87.0+0/boost.v1.87.0.aarch64-linux-gnu-cxx03.tar.gz
+source_filename = boost.v1.87.0.aarch64-linux-gnu-cxx03.tar.gz
+source_hash = f22f6df47c598c08bb6abb14252b884092e9bd7bf75b6a03ec3a4b8bceb09985
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = boost-aarch64-linux-gnu-cxx03

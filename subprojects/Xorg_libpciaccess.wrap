@@ -1,0 +1,14 @@
+# meson-jll: name=Xorg_libpciaccess version=0.19.0+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = Xorg_libpciaccess
+source_filename = _meson-jll-empty.tar
+patch_directory = Xorg_libpciaccess
+
+[provide]
+# Makes a plain dependency('Xorg_libpciaccess') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+Xorg_libpciaccess = xorg_libpciaccess_dep

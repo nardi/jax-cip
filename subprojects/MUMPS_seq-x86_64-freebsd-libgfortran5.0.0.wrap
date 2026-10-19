@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = MUMPS_seq-x86_64-freebsd-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/MUMPS_seq_jll.jl/releases/download/MUMPS_seq-v500.900.100+0/MUMPS_seq.v500.900.100.x86_64-unknown-freebsd-libgfortran5.tar.gz
+source_filename = MUMPS_seq.v500.900.100.x86_64-unknown-freebsd-libgfortran5.tar.gz
+source_hash = e34052980a9dc6ac4553f7e89bf40ec4d982a6cba7ec16dfac998930f50c73f4
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = MUMPS_seq-x86_64-freebsd-libgfortran5.0.0

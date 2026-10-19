@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Bzip2-x86_64-darwin
+source_url = https://github.com/JuliaBinaryWrappers/Bzip2_jll.jl/releases/download/Bzip2-v1.0.9+0/Bzip2.v1.0.9.x86_64-apple-darwin.tar.gz
+source_filename = Bzip2.v1.0.9.x86_64-apple-darwin.tar.gz
+source_hash = 576a0efc4a249f3dc06fd491b6061963d9858b832973355730783f7c13f6519f
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Bzip2-x86_64-darwin

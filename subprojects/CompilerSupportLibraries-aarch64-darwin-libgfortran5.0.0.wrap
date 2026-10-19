@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = CompilerSupportLibraries-aarch64-darwin-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/CompilerSupportLibraries_jll.jl/releases/download/CompilerSupportLibraries-v1.5.7+0/CompilerSupportLibraries.v1.5.7.aarch64-apple-darwin-libgfortran5.tar.gz
+source_filename = CompilerSupportLibraries.v1.5.7.aarch64-apple-darwin-libgfortran5.tar.gz
+source_hash = 71ad8f497e66d24db897e34bd3413d089382232cb807b94d8901d636d25b9add
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = CompilerSupportLibraries-aarch64-darwin-libgfortran5.0.0

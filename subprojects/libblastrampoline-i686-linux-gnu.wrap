@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = libblastrampoline-i686-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/libblastrampoline_jll.jl/releases/download/libblastrampoline-v5.16.0+0/libblastrampoline.v5.16.0.i686-linux-gnu.tar.gz
+source_filename = libblastrampoline.v5.16.0.i686-linux-gnu.tar.gz
+source_hash = bec6e893187c5f93bd325b212c58176a4b673964418d62965f3c0ef928bbc69d
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = libblastrampoline-i686-linux-gnu

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = MPFR-i686-linux-musl
+source_url = https://github.com/JuliaBinaryWrappers/MPFR_jll.jl/releases/download/MPFR-v4.2.2+1/MPFR.v4.2.2.i686-linux-musl.tar.gz
+source_filename = MPFR.v4.2.2.i686-linux-musl.tar.gz
+source_hash = aafa378a4e2e22cbf2ec542ba4d0208b516e326844b045c37b2a16bf3d03c87e
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = MPFR-i686-linux-musl

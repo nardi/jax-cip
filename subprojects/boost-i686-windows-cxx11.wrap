@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = boost-i686-windows-cxx11
+source_url = https://github.com/JuliaBinaryWrappers/boost_jll.jl/releases/download/boost-v1.87.0+0/boost.v1.87.0.i686-w64-mingw32-cxx11.tar.gz
+source_filename = boost.v1.87.0.i686-w64-mingw32-cxx11.tar.gz
+source_hash = b14dda3e8f5bf3d2b11ac33d75f2cf3af87a149726776a00312db278fea8832a
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = boost-i686-windows-cxx11

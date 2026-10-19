@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Ncurses-armv7l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/Ncurses_jll.jl/releases/download/Ncurses-v6.6.0+2/Ncurses.v6.6.0.armv7l-linux-gnueabihf.tar.gz
+source_filename = Ncurses.v6.6.0.armv7l-linux-gnueabihf.tar.gz
+source_hash = e2caf09d9642fa32d5c8c625e225c195c8f89702a1c92abe3f989dbc9729b69d
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Ncurses-armv7l-linux-gnueabihf

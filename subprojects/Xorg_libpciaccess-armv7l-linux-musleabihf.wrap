@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Xorg_libpciaccess-armv7l-linux-musleabihf
+source_url = https://github.com/JuliaBinaryWrappers/Xorg_libpciaccess_jll.jl/releases/download/Xorg_libpciaccess-v0.19.0+0/Xorg_libpciaccess.v0.19.0.armv7l-linux-musleabihf.tar.gz
+source_filename = Xorg_libpciaccess.v0.19.0.armv7l-linux-musleabihf.tar.gz
+source_hash = 8f17cecc461860f2b0ce45f7720a93bd9c5db7e3498ae0a38e5feccc96e56b5f
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Xorg_libpciaccess-armv7l-linux-musleabihf

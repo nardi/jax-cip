@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Bzip2-x86_64-windows
+source_url = https://github.com/JuliaBinaryWrappers/Bzip2_jll.jl/releases/download/Bzip2-v1.0.9+0/Bzip2.v1.0.9.x86_64-w64-mingw32.tar.gz
+source_filename = Bzip2.v1.0.9.x86_64-w64-mingw32.tar.gz
+source_hash = 4672bad158716479b25b3d26a123519bb42843451ea0adf3622ec253d742c81d
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Bzip2-x86_64-windows

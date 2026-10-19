@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = boost-armv7l-linux-gnueabihf-cxx03
+source_url = https://github.com/JuliaBinaryWrappers/boost_jll.jl/releases/download/boost-v1.87.0+0/boost.v1.87.0.armv7l-linux-gnueabihf-cxx03.tar.gz
+source_filename = boost.v1.87.0.armv7l-linux-gnueabihf-cxx03.tar.gz
+source_hash = dbde3e8a6b1b5057814fb78ba55c6ba185a8ab81900285ab5537c69e81871e32
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = boost-armv7l-linux-gnueabihf-cxx03

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = MUMPS_seq-x86_64-darwin-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/MUMPS_seq_jll.jl/releases/download/MUMPS_seq-v500.900.100+0/MUMPS_seq.v500.900.100.x86_64-apple-darwin-libgfortran5.tar.gz
+source_filename = MUMPS_seq.v500.900.100.x86_64-apple-darwin-libgfortran5.tar.gz
+source_hash = 84eb018dcfbcd2ba842345a369d22cb605ef460fb5942289e614583ce64fb26b
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = MUMPS_seq-x86_64-darwin-libgfortran5.0.0

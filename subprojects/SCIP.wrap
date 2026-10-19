@@ -1,0 +1,14 @@
+# meson-jll: name=SCIP version=1000.100.0+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = SCIP
+source_filename = _meson-jll-empty.tar
+patch_directory = SCIP
+
+[provide]
+# Makes a plain dependency('SCIP') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+SCIP = scip_dep

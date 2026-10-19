@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = XML2-aarch64-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/XML2_jll.jl/releases/download/XML2-v2.15.4+0/XML2.v2.15.4.aarch64-linux-gnu.tar.gz
+source_filename = XML2.v2.15.4.aarch64-linux-gnu.tar.gz
+source_hash = a64559264ff0f415c107e58fbf5acdb41d119df471bfa1daf7a5adb671affe50
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = XML2-aarch64-linux-gnu

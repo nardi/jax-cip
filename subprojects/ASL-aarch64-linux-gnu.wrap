@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = ASL-aarch64-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/ASL_jll.jl/releases/download/ASL-v0.1.5+0/ASL.v0.1.5.aarch64-linux-gnu.tar.gz
+source_filename = ASL.v0.1.5.aarch64-linux-gnu.tar.gz
+source_hash = 3de734690074ba7422bbcb8c5be3e1f8e50cdb2aab2d4eaca90e32d478a9deb1
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = ASL-aarch64-linux-gnu

@@ -1,0 +1,14 @@
+# meson-jll: name=OpenBLAS32 version=0.3.34+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = OpenBLAS32
+source_filename = _meson-jll-empty.tar
+patch_directory = OpenBLAS32
+
+[provide]
+# Makes a plain dependency('OpenBLAS32') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+OpenBLAS32 = openblas32_dep

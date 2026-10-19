@@ -1,0 +1,14 @@
+# meson-jll: name=XML2 version=2.15.4+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = XML2
+source_filename = _meson-jll-empty.tar
+patch_directory = XML2
+
+[provide]
+# Makes a plain dependency('XML2') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+XML2 = xml2_dep

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Bzip2-i686-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Bzip2_jll.jl/releases/download/Bzip2-v1.0.9+0/Bzip2.v1.0.9.i686-linux-gnu.tar.gz
+source_filename = Bzip2.v1.0.9.i686-linux-gnu.tar.gz
+source_hash = 40421bb32cad07f329bd555858a6c8bbd90eac748659505ef7318fddc63896fc
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Bzip2-i686-linux-gnu

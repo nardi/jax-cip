@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Bzip2-armv7l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/Bzip2_jll.jl/releases/download/Bzip2-v1.0.9+0/Bzip2.v1.0.9.armv7l-linux-gnueabihf.tar.gz
+source_filename = Bzip2.v1.0.9.armv7l-linux-gnueabihf.tar.gz
+source_hash = 0520f163d096315e34458e1ddcb705255bebeab94b80511dd9858c6e7448fdab
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Bzip2-armv7l-linux-gnueabihf

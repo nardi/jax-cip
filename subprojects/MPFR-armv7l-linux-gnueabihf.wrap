@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = MPFR-armv7l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/MPFR_jll.jl/releases/download/MPFR-v4.2.2+1/MPFR.v4.2.2.armv7l-linux-gnueabihf.tar.gz
+source_filename = MPFR.v4.2.2.armv7l-linux-gnueabihf.tar.gz
+source_hash = 6e0932a8b19ad8fa2dd6b2b653ac99d6d50f3c9330c8a923d039cf1354807104
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = MPFR-armv7l-linux-gnueabihf

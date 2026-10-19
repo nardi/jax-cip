@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Zlib-riscv64-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v1.3.2+0/Zlib.v1.3.2.riscv64-linux-gnu.tar.gz
+source_filename = Zlib.v1.3.2.riscv64-linux-gnu.tar.gz
+source_hash = 0942c9a53de902ac3ccaa3184210eb6f9aae5c5a16bec0232ab1d63596c360f1
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Zlib-riscv64-linux-gnu

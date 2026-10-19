@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Zlib-armv6l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v1.3.2+0/Zlib.v1.3.2.armv6l-linux-gnueabihf.tar.gz
+source_filename = Zlib.v1.3.2.armv6l-linux-gnueabihf.tar.gz
+source_hash = e5eb473dcce60b244c9c84f2b25a0e8c42f6fd1ad714cd31c482dec939865177
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Zlib-armv6l-linux-gnueabihf

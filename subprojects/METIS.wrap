@@ -1,0 +1,14 @@
+# meson-jll: name=METIS version=5.1.4+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = METIS
+source_filename = _meson-jll-empty.tar
+patch_directory = METIS
+
+[provide]
+# Makes a plain dependency('METIS') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+METIS = metis_dep

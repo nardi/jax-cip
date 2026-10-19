@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Ncurses-aarch64-freebsd
+source_url = https://github.com/JuliaBinaryWrappers/Ncurses_jll.jl/releases/download/Ncurses-v6.6.0+2/Ncurses.v6.6.0.aarch64-unknown-freebsd.tar.gz
+source_filename = Ncurses.v6.6.0.aarch64-unknown-freebsd.tar.gz
+source_hash = 9162b95ac20a391cbd5fb4d40547634d5c57d58698c6f60cc20748afc0bc968b
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Ncurses-aarch64-freebsd

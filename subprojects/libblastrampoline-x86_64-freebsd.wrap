@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = libblastrampoline-x86_64-freebsd
+source_url = https://github.com/JuliaBinaryWrappers/libblastrampoline_jll.jl/releases/download/libblastrampoline-v5.16.0+0/libblastrampoline.v5.16.0.x86_64-unknown-freebsd.tar.gz
+source_filename = libblastrampoline.v5.16.0.x86_64-unknown-freebsd.tar.gz
+source_hash = 383af24b16973b3ccba44f9383bb5b8a7c15807e1f8fb5ec9da44dbf5910a07d
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = libblastrampoline-x86_64-freebsd

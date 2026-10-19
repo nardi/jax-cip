@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Ncurses-riscv64-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Ncurses_jll.jl/releases/download/Ncurses-v6.6.0+2/Ncurses.v6.6.0.riscv64-linux-gnu.tar.gz
+source_filename = Ncurses.v6.6.0.riscv64-linux-gnu.tar.gz
+source_hash = 6e480ab83f975613ec868d7d54e78ce3f4c47fa19380e81d17857a244858a405
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Ncurses-riscv64-linux-gnu

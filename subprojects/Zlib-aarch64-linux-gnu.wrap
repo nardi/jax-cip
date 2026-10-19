@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Zlib-aarch64-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v1.3.2+0/Zlib.v1.3.2.aarch64-linux-gnu.tar.gz
+source_filename = Zlib.v1.3.2.aarch64-linux-gnu.tar.gz
+source_hash = 5cffc1e0520c7e5d281650483a7118d3a3d2a8c9edc9222000ffdfdc3101e343
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Zlib-aarch64-linux-gnu

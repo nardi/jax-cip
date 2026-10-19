@@ -1,0 +1,14 @@
+# meson-jll: name=libblastrampoline version=5.16.0+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = libblastrampoline
+source_filename = _meson-jll-empty.tar
+patch_directory = libblastrampoline
+
+[provide]
+# Makes a plain dependency('libblastrampoline') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+libblastrampoline = libblastrampoline_dep

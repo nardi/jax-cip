@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = boost-x86_64-darwin
+source_url = https://github.com/JuliaBinaryWrappers/boost_jll.jl/releases/download/boost-v1.87.0+0/boost.v1.87.0.x86_64-apple-darwin.tar.gz
+source_filename = boost.v1.87.0.x86_64-apple-darwin.tar.gz
+source_hash = 1cf9506a4cbebd14534de5ccc65c441c1f3f4c5ea384484c15ddf1a720eae01d
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = boost-x86_64-darwin

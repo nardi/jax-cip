@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Readline-riscv64-linux-gnu
+source_url = https://github.com/JuliaBinaryWrappers/Readline_jll.jl/releases/download/Readline-v8.3.3+0/Readline.v8.3.3.riscv64-linux-gnu.tar.gz
+source_filename = Readline.v8.3.3.riscv64-linux-gnu.tar.gz
+source_hash = 7a58ce7d9eed8e38468cfd6d8efd6c0a67026e7b240a7839150165e78678f843
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Readline-riscv64-linux-gnu

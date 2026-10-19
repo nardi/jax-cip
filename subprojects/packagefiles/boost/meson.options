@@ -1,0 +1,5 @@
+
+# This package splits at least one platform by C++ standard library ABI.
+# The selector overlay reads this option to pick the matching triplet.
+option('cxxstring_abi', type: 'combo', choices: ['cxx03', 'cxx11'], value: 'cxx11')
+

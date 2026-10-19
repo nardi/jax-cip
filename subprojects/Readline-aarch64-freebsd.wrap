@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Readline-aarch64-freebsd
+source_url = https://github.com/JuliaBinaryWrappers/Readline_jll.jl/releases/download/Readline-v8.3.3+0/Readline.v8.3.3.aarch64-unknown-freebsd.tar.gz
+source_filename = Readline.v8.3.3.aarch64-unknown-freebsd.tar.gz
+source_hash = 47b9c4d3bd9df75c7ee4b5dd61bc2bb8894ebac7423f489c9bebe79b83b91719
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Readline-aarch64-freebsd

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = SCIP-x86_64-linux-gnu-cxx11
+source_url = https://github.com/JuliaBinaryWrappers/SCIP_jll.jl/releases/download/SCIP-v1000.100.0+0/SCIP.v1000.100.0.x86_64-linux-gnu-cxx11.tar.gz
+source_filename = SCIP.v1000.100.0.x86_64-linux-gnu-cxx11.tar.gz
+source_hash = b1c8e95736908c067b5f4e31817cc6261a6943937e781fe4303912b091d62ed7
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = SCIP-x86_64-linux-gnu-cxx11

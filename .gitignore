@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv*
+
+# MkDocs build output
+site/
+
+# Test and benchmark output
+.benchmarks/
+.coverage
+.coverage.*
+coverage.xml
+.hypothesis/
+
+# Meson subprojects are extracted from the committed wraps on configure, so only the
+# wraps, their overlays and the lock file are tracked.
+/subprojects/*
+!/subprojects/*.wrap
+!/subprojects/packagefiles/
+
+# Coverage builds copy the generated C files next to the Cython sources.
+/src/jaxcip/*.c

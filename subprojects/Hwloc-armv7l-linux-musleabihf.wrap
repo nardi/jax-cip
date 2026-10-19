@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Hwloc-armv7l-linux-musleabihf
+source_url = https://github.com/JuliaBinaryWrappers/Hwloc_jll.jl/releases/download/Hwloc-v2.15.0+0/Hwloc.v2.15.0.armv7l-linux-musleabihf.tar.gz
+source_filename = Hwloc.v2.15.0.armv7l-linux-musleabihf.tar.gz
+source_hash = 42a5b7f0562fea84adcea656d8c9229f3915a497d66f812782cd28a572f32270
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Hwloc-armv7l-linux-musleabihf

@@ -1,0 +1,8 @@
+
+# This package splits at least one platform by C++ standard library ABI.
+# The selector overlay reads this option to pick the matching triplet.
+option('cxxstring_abi', type: 'combo', choices: ['cxx11'], value: 'cxx11')
+
+
+# Same idea, for platforms split by Fortran runtime version instead.
+option('libgfortran_version', type: 'combo', choices: ['5.0.0'], value: '5.0.0')

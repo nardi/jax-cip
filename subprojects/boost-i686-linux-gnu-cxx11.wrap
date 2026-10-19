@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = boost-i686-linux-gnu-cxx11
+source_url = https://github.com/JuliaBinaryWrappers/boost_jll.jl/releases/download/boost-v1.87.0+0/boost.v1.87.0.i686-linux-gnu-cxx11.tar.gz
+source_filename = boost.v1.87.0.i686-linux-gnu-cxx11.tar.gz
+source_hash = 12f7d088fdc55c2be96a960ad9818fe38ef240c5586093159d3462f5f4731807
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = boost-i686-linux-gnu-cxx11

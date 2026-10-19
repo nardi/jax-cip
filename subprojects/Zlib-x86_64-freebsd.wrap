@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Zlib-x86_64-freebsd
+source_url = https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v1.3.2+0/Zlib.v1.3.2.x86_64-unknown-freebsd.tar.gz
+source_filename = Zlib.v1.3.2.x86_64-unknown-freebsd.tar.gz
+source_hash = dfdfd545c07392e4a6af2772f789d8d497f2bb2aec337edba9ccd72c4b701c64
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Zlib-x86_64-freebsd

@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = SPRAL-armv6l-linux-musleabihf-libgfortran5.0.0
+source_url = https://github.com/JuliaBinaryWrappers/SPRAL_jll.jl/releases/download/SPRAL-v2025.9.18+1/SPRAL.v2025.9.18.armv6l-linux-musleabihf-libgfortran5.tar.gz
+source_filename = SPRAL.v2025.9.18.armv6l-linux-musleabihf-libgfortran5.tar.gz
+source_hash = 67f4c37c9772feacf1499035bda1e275cc6291fbf8e5782da2157f314871f79c
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = SPRAL-armv6l-linux-musleabihf-libgfortran5.0.0

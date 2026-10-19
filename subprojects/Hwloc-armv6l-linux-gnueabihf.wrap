@@ -1,0 +1,10 @@
+# This platform's tarball, straight from the JLL's own release assets.
+[wrap-file]
+directory = Hwloc-armv6l-linux-gnueabihf
+source_url = https://github.com/JuliaBinaryWrappers/Hwloc_jll.jl/releases/download/Hwloc-v2.15.0+0/Hwloc.v2.15.0.armv6l-linux-gnueabihf.tar.gz
+source_filename = Hwloc.v2.15.0.armv6l-linux-gnueabihf.tar.gz
+source_hash = 2646a3c22282e232b4582bdd36b8cce1428a3bef63972eb5b75ac49f85a78291
+# The JLL's tarballs are flat archives with no leading directory.
+lead_directory_missing = true
+# Drops in the meson.build this platform's tarball does not ship.
+patch_directory = Hwloc-armv6l-linux-gnueabihf

@@ -1,0 +1,14 @@
+# meson-jll: name=Ipopt version=300.1400.2000+1
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = Ipopt
+source_filename = _meson-jll-empty.tar
+patch_directory = Ipopt
+
+[provide]
+# Makes a plain dependency('Ipopt') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+Ipopt = ipopt_dep

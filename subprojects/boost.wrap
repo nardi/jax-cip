@@ -1,0 +1,14 @@
+# meson-jll: name=boost version=1.87.0+0
+# Meson requires a source for every [wrap-file], even an overlay-only one,
+# so this points at a shared empty archive instead of a real download (see
+# generate::EMPTY_TAR_FILENAME). The actual content comes entirely from
+# patch_directory below.
+[wrap-file]
+directory = boost
+source_filename = _meson-jll-empty.tar
+patch_directory = boost
+
+[provide]
+# Makes a plain dependency('boost') call in a consuming project
+# resolve to this subproject automatically, with no fallback wiring.
+boost = boost_dep
