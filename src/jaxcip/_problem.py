@@ -28,6 +28,7 @@ from cython.cimports.jaxcip._scip import (
     SCIP,
     SCIP_CONS,
     SCIP_EXPR,
+    SCIP_INVALID,
     SCIP_OKAY,
     SCIP_PARAM,
     SCIP_RETCODE,
@@ -48,6 +49,10 @@ from cython.cimports.jaxcip._scip import (
     SCIPcreateOrigSol,
     SCIPcreateProbBasic,
     SCIPcreateVarBasic,
+    SCIPevalExprHessianDir,
+    SCIPexprGetBardot,
+    SCIPexprGetChildren,
+    SCIPexprGetNChildren,
     SCIPfree,
     SCIPfreeSol,
     SCIPgetBestSol,
@@ -197,6 +202,8 @@ class Scip:
     def read(path: Path) -> Scip:
         """Reads a problem file in any format SCIP reads, such as `.osil`, `.nl` or `.cip`."""
         instance = Scip(path.stem)
+        # Solving applies the verbosity of its options, which reading comes before.
+        instance.set_parameter("display/verblevel", 0)
         check(
             SCIPreadProb(instance.scip, str(path).encode(), cython.NULL), f"read {path}"
         )
@@ -609,31 +616,37 @@ class Scip:
             view[index] = SCIPgetSolVal(self.scip, sol, variables[index])
         return SCIPgetSolOrigObj(self.scip, sol), values
 
-    def check_solution(self, values: cython.double[::1]) -> bool:
-        """Returns whether an assignment of all variables satisfies every constraint and bound."""
+    @cython.cfunc
+    def new_solution(self, values: cython.double[::1]) -> cython.pointer[SCIP_SOL]:
+        """Returns a new solution of the original problem with a value for every variable."""
         count: cython.int = self.num_variables
         if values.shape[0] != count:
             raise ValueError(
                 f"The problem has {count} variables, got {values.shape[0]} values"
             )
         sol: cython.pointer[SCIP_SOL] = cython.NULL
-        feasible: SCIP_Bool = 0
         check(
             SCIPcreateOrigSol(self.scip, cython.address(sol), cython.NULL),
             "create a solution",
         )
+        if count > 0:
+            retcode: SCIP_RETCODE = SCIPsetSolVals(
+                self.scip,
+                sol,
+                count,
+                self.variable_pointers(),
+                cython.address(values[0]),
+            )
+            if retcode != SCIP_OKAY:
+                SCIPfreeSol(self.scip, cython.address(sol))  # pragma: no cover
+            check(retcode, "set solution values")
+        return sol
+
+    def check_solution(self, values: cython.double[::1]) -> bool:
+        """Returns whether an assignment of all variables satisfies every constraint and bound."""
+        feasible: SCIP_Bool = 0
+        sol: cython.pointer[SCIP_SOL] = self.new_solution(values)
         try:
-            if count > 0:
-                check(
-                    SCIPsetSolVals(
-                        self.scip,
-                        sol,
-                        count,
-                        self.variable_pointers(),
-                        cython.address(values[0]),
-                    ),
-                    "set solution values",
-                )
             check(
                 SCIPcheckSolOrig(self.scip, sol, cython.address(feasible), False, True),
                 "check a solution",
@@ -641,3 +654,47 @@ class Scip:
         finally:
             SCIPfreeSol(self.scip, cython.address(sol))
         return bool(feasible)
+
+    def hessian_direction(
+        self,
+        term: JaxTerm,
+        options: HandlerOptions,
+        x: cython.double[::1],
+        direction: cython.double[::1],
+    ) -> np.ndarray | None:
+        """Returns the Hessian of a JAX term at `x` times `direction`, one entry per input.
+
+        The result is `None` if the term or its derivatives cannot be evaluated there.
+
+        `x` and `direction` hold a value for every variable. SCIP computes the product with
+        `SCIPevalExprHessianDir`, the only caller of the handler's `BWFWDIFF` callback. Its
+        own plugins do not use it, so this serves plugins that do and tests.
+        """
+        expr: cython.pointer[SCIP_EXPR] = self.jax_expression(term, options)
+        point: cython.pointer[SCIP_SOL] = cython.NULL
+        along: cython.pointer[SCIP_SOL] = cython.NULL
+        index: cython.int
+        try:
+            point = self.new_solution(x)
+            along = self.new_solution(direction)
+            check(
+                SCIPevalExprHessianDir(self.scip, expr, point, 0, along),
+                "evaluate a Hessian-vector product",
+            )
+            if SCIPexprGetBardot(expr) == SCIP_INVALID:
+                return None
+            count: cython.int = SCIPexprGetNChildren(expr)
+            children: cython.pointer[cython.pointer[SCIP_EXPR]] = SCIPexprGetChildren(
+                expr
+            )
+            result = np.empty(count)
+            view: cython.double[::1] = result
+            for index in range(count):
+                view[index] = SCIPexprGetBardot(children[index])
+        finally:
+            if point != cython.NULL:
+                SCIPfreeSol(self.scip, cython.address(point))
+            if along != cython.NULL:
+                SCIPfreeSol(self.scip, cython.address(along))
+            SCIPreleaseExpr(self.scip, cython.address(expr))
+        return result
