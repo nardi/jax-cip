@@ -138,10 +138,16 @@ def cache_directory() -> Path:
     return directory
 
 
-def term_key(jaxpr_text: str, signature: TermSignature, options: ProgramOptions) -> str:
+def term_key(
+    jaxpr_text: str,
+    signs: tuple[float, ...],
+    signature: TermSignature,
+    options: ProgramOptions,
+) -> str:
     """Returns the key of a term's programs, equal for terms that compile to the same code."""
     digest = hashlib.sha256(library_identity())
     digest.update(jaxpr_text.encode())
+    digest.update(repr(signs).encode())
     digest.update(repr(signature).encode())
     digest.update(repr(options).encode())
     return digest.hexdigest()

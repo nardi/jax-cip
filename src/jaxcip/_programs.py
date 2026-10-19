@@ -189,6 +189,8 @@ def program_shapes(
             return (vector, vector, vector, params)
         case Program.INTERVAL | Program.GRADIENT_INTERVAL:
             return (vector, vector, params)
+        case _:
+            raise AssertionError(f"Unknown program {program}.")
 
 
 def lower(

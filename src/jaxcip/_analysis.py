@@ -8,7 +8,7 @@ and keeps for every term only the inputs it depends on.
 
 import enum
 from collections.abc import Callable, Sequence
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
@@ -118,8 +118,17 @@ The indices must be constant. For `scatter-add` the updates come after the indic
 BILINEAR_PRIMITIVES = frozenset({"mul", "dot_general"})
 """Primitives that are linear in each operand when the other is constant."""
 
+CALL_PRIMITIVES = frozenset(
+    {"jit", "pjit", "closed_call", "core_call", "remat2", "checkpoint"}
+)
+"""Primitives that apply their body once to their operands.
+
+Loops such as `scan` also hold a body, but run it repeatedly, so a value that is constant on
+the first pass may not be on later ones. They are treated as nonlinear.
+"""
+
 SUBJAXPR_PARAMETERS = ("jaxpr", "call_jaxpr")
-"""Parameters that hold the body of call-like primitives such as `pjit`."""
+"""Parameters that hold the body of call primitives."""
 
 
 def analyse(
@@ -164,10 +173,7 @@ def analyse(
 
 def shape_of(atom: Atom) -> tuple[int, ...]:
     """Returns the shape of a value of a jaxpr."""
-    aval = atom.aval
-    if not isinstance(aval, ShapedArray):
-        raise TypeError(f"A function of a problem must compute arrays, not {aval}.")
-    return tuple(aval.shape)
+    return tuple(cast(ShapedArray, atom.aval).shape)
 
 
 def summands(
@@ -279,6 +285,8 @@ def equation_linearity(equation: JaxprEqn, inputs: list[Linearity]) -> list[Line
         (equation.params[key] for key in SUBJAXPR_PARAMETERS if key in equation.params),
         None,
     )
+    if name not in CALL_PRIMITIVES:
+        body = None
     match body:
         case ClosedJaxpr():
             return linearity_of(

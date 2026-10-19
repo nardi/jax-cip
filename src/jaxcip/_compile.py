@@ -174,6 +174,11 @@ def compile(  # noqa: A001
                 )
             case BatchedConstraint():
                 block, built = batched_block(constraint, variables, options)
+            case _:
+                raise TypeError(
+                    "A constraint must be a Constraint or a BatchedConstraint, "
+                    f"not {type(constraint).__name__}."
+                )
         statistics = statistics.add(built)
         blocks.append(block)
     return CompiledProblem(
@@ -366,7 +371,7 @@ def build_handle(
 ) -> tuple[FunctionHandle, _cache.BuildStatistics]:
     """Returns the compiled programs of a term, from memory, the disk cache or a new build."""
     programs = program_options(options)
-    key = _cache.term_key(str(term.jaxpr), signature, programs)
+    key = _cache.term_key(str(term.jaxpr), term.signs, signature, programs)
     handle = compiled_terms.get(key)
     if handle is not None:
         return handle, _cache.BuildStatistics(reused=1)
@@ -473,6 +478,8 @@ def term_rows(
                     else value.ravel()
                 )
                 param_parts.append(np.broadcast_to(value, (rows, value.shape[-1])))
+            case _:
+                raise AssertionError(f"Unknown input origin {ref.origin}.")
     if compiled.signature.num_entries > 1:
         param_parts.append(np.arange(rows, dtype=np.float64)[:, None])
     params = np.concatenate(param_parts, axis=1) if param_parts else np.zeros((rows, 0))

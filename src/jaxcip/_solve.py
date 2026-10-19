@@ -162,6 +162,8 @@ def build_scip(compiled: CompiledProblem, params: PyTree[Any]) -> Scip:
                 bounds = (-math.inf, 0.0)
             case Sense.MAXIMIZE:
                 bounds = (0.0, math.inf)
+            case _:
+                raise AssertionError(f"Unknown sense {compiled.problem.sense}.")
         terms = row_terms(objective_block, variables, param_leaves)[0]
         scip.add_jax_constraint(
             terms,
