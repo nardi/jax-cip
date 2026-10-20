@@ -1,9 +1,10 @@
 """Solves MINLPLib instances with JAX terms and compares them with SCIP's native solves.
 
 The instances come from `scripts/fetch_minlplib.py`, in the directory named by
-`JAXCIP_MINLPLIB_DIR`. `--minlplib=quick` solves the instances in `quick.txt`, which native
-SCIP solves in about a second, and `--minlplib=full` solves every downloaded instance. With
-`JAXCIP_MINLPLIB_RESULTS` set, each result is appended to that file as a line of JSON.
+`JAXCIP_MINLPLIB_DIR`. `--minlplib=quick` solves the instances in `quick.txt`, which
+native SCIP solves within a second and JAX-CIP builds and solves within 10 seconds.
+`--minlplib=full` solves every downloaded instance. With `JAXCIP_MINLPLIB_RESULTS` set,
+the test appends each result to that file as a line of JSON.
 """
 
 import json
@@ -26,8 +27,12 @@ QUICK = Path(__file__).with_name("quick.txt")
 RELATIVE_TOLERANCE = 1e-4
 """Allowed relative difference between optimal objectives."""
 
-ABSOLUTE_TOLERANCE = 1e-6
-"""Allowed absolute difference between optimal objectives near zero."""
+ABSOLUTE_TOLERANCE = 1e-5
+"""Allowed absolute difference between optimal objectives near zero.
+
+SCIP accepts bound violations up to its feasibility tolerance of 1e-6, which moves an
+objective near zero by that amount times its coefficients.
+"""
 
 
 OBJECTIVE_CONSTANT_VARIABLE = "objconstvar"
@@ -152,6 +157,9 @@ def test_instance(
         return
     if solution.x is not None:
         reference = Scip.read(path)
+        # Presolving differs from the native solve, so the retransformed values of a row
+        # with large coefficients may miss its side by more than the feasibility tolerance.
+        reference.set_parameter("constraints/linear/checkrelmaxabs", True)
         x = np.array(solution.x)
         values = dict(zip(instance.names, x, strict=True))
         objective = instance.objective

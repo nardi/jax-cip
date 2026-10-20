@@ -152,7 +152,9 @@ def row_function(shape: Shape) -> Callable[[jax.Array, jax.Array], jax.Array]:
             total += jnp.sum(coefficients * x[first] * x[second])
         if shape.tree is not None:
             rest = params[num_linear + num_quadratic :]
-            total += evaluate_tree(shape.tree, x, iter(rest))
+            # Static indices, since iterating over more than 100 entries traces a loop.
+            numbers = (rest[index] for index in range(rest.shape[0]))
+            total += evaluate_tree(shape.tree, x, numbers)
         return total
 
     return function
