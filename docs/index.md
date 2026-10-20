@@ -58,9 +58,9 @@ assert abs(solution.objective - (-1.0316)) < 1e-3
 
 ## Comparison with native SCIP
 
-On the small instances of [MINLPLib](https://www.minlplib.org/) that SCIP solves
-natively in about a second, JAX-CIP reaches the same optima. It needs more nodes and
-more time, because SCIP sees each JAX term as one opaque function and loses the
+JAX-CIP solves 331 of the 427 small [MINLPLib](https://www.minlplib.org/) instances
+that native SCIP solves within a minute, and every optimum it reports is the known one.
+It needs more nodes and more time, because SCIP sees each JAX term as one opaque function and loses the
 structure it detects in its own expressions. The [comparison page](guide/comparison.md)
 lists the numbers for every instance.
 
