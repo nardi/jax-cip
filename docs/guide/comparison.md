@@ -16,7 +16,7 @@ A timeout is recorded and not failed.
 
 ## Instances
 
-The full run covers the 467 instances with a known optimum or a proof of infeasibility,
+The full run covers the 471 instances with a known optimum or a proof of infeasibility,
 at most 60 variables and no semicontinuous variables or SOS constraints. The quick tier in `tests/minlplib/quick.txt` holds the 235
 of them that both solvers finish in about a second, and it runs on every push.
 
@@ -43,10 +43,11 @@ dual bounds stall without it.
 
 - `clay0203m` and `st_e05` stop with SCIP's LP error -6, which native SCIP does not hit
   on the same instances.
-- `cvxnonsep_nsig30`, `cvxnonsep_nsig40`, `cvxnonsep_psig40` and `ghg_1veh` have rows
-  with long products, such as the 30 factors of `cvxnonsep_nsig30`. JAXormick's convex
-  and concave programs of such a product take minutes and gigabytes to compile. These
-  runs ran out of memory and have no result.
+- `ghg_1veh` takes 411 seconds to build its programs, most of them for its 127 rows with
+  products. The rows of the `cvxnonsep_nsig*` and `cvxnonsep_psig40` instances, with up to
+  40 factors, take 21 to 29 seconds. The converter writes a product as one `jnp.prod`,
+  which JAXormick relaxes in log₂ n levels. A chain of `*` takes minutes and gigabytes to
+  compile at 30 factors.
 - A problem with hundreds of distinct terms can reach Linux's limit on memory mappings,
   as [Performance](performance.md#build-time) describes.
 
@@ -114,9 +115,11 @@ table below.
 | `cvxnonsep_normcon30` | optimal | 0.20 | time_limit | 60.00 | 990.67 |
 | `cvxnonsep_normcon30r` | optimal | 0.13 | time_limit | 60.00 | 115211.00 |
 | `cvxnonsep_normcon40` | optimal | 0.08 | time_limit | 60.00 | 129.71 |
-| `cvxnonsep_nsig20` | optimal | 57.73 | time_limit | 60.00 | 0.03 |
+| `cvxnonsep_nsig20` | optimal | 50.92 | time_limit | 60.00 | 0.15 |
 | `cvxnonsep_nsig20r` | optimal | 0.34 | optimal | 0.60 | 4.50 |
+| `cvxnonsep_nsig30` | time_limit | 60.00 | time_limit | 60.00 | 0.08 |
 | `cvxnonsep_nsig30r` | optimal | 0.48 | optimal | 1.02 | 3.88 |
+| `cvxnonsep_nsig40` | time_limit | 60.01 | time_limit | 60.00 | 0.05 |
 | `cvxnonsep_pcon20` | optimal | 2.61 | time_limit | 60.00 | 877.15 |
 | `cvxnonsep_pcon20r` | optimal | 0.25 | optimal | 0.22 | 6.00 |
 | `cvxnonsep_pcon30` | time_limit | 60.00 | optimal | 19.82 | 13.19 |
@@ -126,6 +129,7 @@ table below.
 | `cvxnonsep_psig20` | time_limit | 60.00 | time_limit | 62.02 | 0.00 |
 | `cvxnonsep_psig20r` | optimal | 0.18 | time_limit | 60.00 | 1019.20 |
 | `cvxnonsep_psig30` | time_limit | 60.00 | time_limit | 60.37 | 0.00 |
+| `cvxnonsep_psig40` | time_limit | 60.00 | time_limit | 60.00 | 0.52 |
 | `dispatch` | optimal | 0.01 | optimal | 52.39 | 248697.00 |
 | `du-opt` | optimal | 15.69 | time_limit | 60.00 | 0.89 |
 | `du-opt5` | optimal | 0.64 | time_limit | 60.00 | 64.41 |
@@ -238,6 +242,7 @@ table below.
 | `gear4` | optimal | 0.48 | optimal | 1.95 | 8.39 |
 | `genpooling_lee1` | optimal | 4.39 | time_limit | 60.00 | 26.17 |
 | `genpooling_lee2` | optimal | 9.53 | time_limit | 60.00 | 9.31 |
+| `ghg_1veh` | time_limit | 60.00 | time_limit | 60.00 | 0.01 |
 | `gkocis` | optimal | 0.03 | optimal | 0.03 | 2.00 |
 | `graphpart_2g-0044-1601` | optimal | 0.03 | optimal | 1.16 | 323.00 |
 | `graphpart_2pm-0044-0044` | optimal | 0.09 | optimal | 3.53 | 331.00 |
