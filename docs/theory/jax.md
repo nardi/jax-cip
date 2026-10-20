@@ -1,0 +1,109 @@
+# JAX functions in SCIP
+
+This page follows a JAX function from `Problem` to the callbacks of SCIP's expression
+handler. JAX itself is described by [Bradbury et al. (2018)](references.md) and its
+tracing design by [Frostig et al. (2018)](references.md). The relaxations come from
+[JAXormick](https://nardi.github.io/jaxormick/), whose documentation covers McCormick
+relaxations ([McCormick 1976](references.md), [Mitsos et al. 2009](references.md)).
+
+## Tracing and analysis
+
+[`compile`][jaxcip.compile] traces every function of a problem to a jaxpr, with the
+leaves of the variables and of the parameters as inputs. The analysis then splits the
+output at additions, subtractions and negations into summands and classifies each
+summand as constant, affine or nonlinear in the variables.
+
+- The affine summands go to SCIP as linear coefficients. SCIP propagates and separates
+  linear terms exactly, so they should never hide inside an opaque function. A
+  constraint with no nonlinear summand becomes a plain linear row.
+- Each nonlinear summand becomes a term, a jaxpr of its own inputs. A term keeps only
+  the variable entries it reads. Static indexing such as `x[3]` or `x[2:5]` selects
+  entries, and any other use of a leaf reads all of it.
+
+With `split_sums=False` in [`CompileOptions`][jaxcip.CompileOptions] the nonlinear
+summands stay one term. Separate terms give SCIP more auxiliary variables and tighter
+relaxations, since each term is relaxed over its own smaller box. They also cost more
+LP rows. The default splits.
+
+Every entry of a term's output becomes one SCIP expression, whose children are the
+term's variables. The constraint `lower ≤ affine + Σ terms ≤ upper` then becomes one
+SCIP nonlinear constraint per output entry.
+
+## The seven programs
+
+A term is a scalar function \(f(x, p)\) of two flat vectors, its variables \(x\) and
+its parameters \(p\). Constants that the function closes over are moved into \(p\), so
+two terms that differ only in their numbers have the same code. JAX-CIP builds seven
+programs of \(f\):
+
+| Program | Arguments | Result | Callbacks |
+| --- | --- | --- | --- |
+| value | \(x, p\) | \(f(x, p)\) | `EVAL` |
+| value and gradient | \(x, p\) | \(f\), \(\nabla_x f\) | `EVAL`, `BWDIFF`, `FWDIFF` |
+| Hessian-vector | \(x, d, p\) | \(\nabla_x^2 f \, d\) | `BWFWDIFF` |
+| convex | \(x, \underline{x}, \overline{x}, p\) | convex relaxation and subgradient | `ESTIMATE`, `INITESTIMATES`, `REVERSEPROP` |
+| concave | \(x, \underline{x}, \overline{x}, p\) | concave relaxation and supergradient | `ESTIMATE`, `INITESTIMATES`, `REVERSEPROP` |
+| interval | \(\underline{x}, \overline{x}, p\) | bounds on \(f\) over the box | `INTEVAL` |
+| gradient interval | \(\underline{x}, \overline{x}, p\) | bounds on \(\nabla_x f\) over the box | `MONOTONICITY` |
+
+The Hessian-vector product is `jax.jvp` of `jax.grad`. The relaxations come from
+`jaxormick.convex_side` and `jaxormick.concave_side`, and the intervals from
+`jaxormick.interval`, with the options of [`RelaxationOptions`][jaxcip.RelaxationOptions].
+The gradient interval program is the interval extension of `jax.grad`. XLA takes long to
+compile it for large functions, so terms of more than `gradient_interval_limit` jaxpr
+equations go without it and SCIP treats their monotonicity as unknown.
+
+## Estimators from relaxations
+
+`ESTIMATE` receives a reference point and the local box. The handler clamps the point
+into the box and runs the convex program for an underestimator or the concave program
+for an overestimator. A convex relaxation \(f^{cv}\) with subgradient \(s\) at \(x_0\)
+gives the plane
+
+\[
+f(x) \;\ge\; f^{cv}(x) \;\ge\; f^{cv}(x_0) + s^\top (x - x_0)
+\quad \text{for all } x \in [\underline{x}, \overline{x}],
+\]
+
+which is a valid underestimator on the whole box. When the local box equals the global
+box, the estimator is marked as globally valid, so SCIP keeps the cut for the whole
+tree. `INITESTIMATES` returns planes at the box center and at the points a quarter and
+three quarters along its diagonal. `REVERSEPROP` uses the planes at the box center. An
+underestimator \(a^\top x + b \le f(x) \le u\) bounds each variable as a linear
+inequality, and so does an overestimator with the lower bound of \(f\).
+
+Estimators need a finite box. On a node where an input is unbounded, the handler gives
+no estimator and SCIP branches.
+
+## Execution through PJRT
+
+Each program is exported with `jax.export` to [StableHLO](https://openxla.org/stablehlo)
+and compiled by a PJRT plugin into an executable. The callbacks are C functions that
+run the executables through the [PJRT C API](https://openxla.org/xla/pjrt/pjrt_integration)
+without taking the GIL. The input buffers are 64-byte aligned host memory that the
+plugin reads directly, and outputs are read from the plugin's buffers when it allows
+that, so a call copies nothing.
+
+All expressions of one term share its executables and differ only in their parameter
+vectors and children. A [`BatchedConstraint`][jaxcip.BatchedConstraint] of a thousand
+rows therefore compiles once. Terms are cached in the process by a key of their jaxpr,
+signature and options, and on disk as StableHLO and as executables, so a later process
+skips lowering and compiling.
+
+## Caches in the handler
+
+SCIP often asks for the same thing twice. `BWDIFF` follows `EVAL` at the same point,
+and propagation repeats interval evaluations on unchanged boxes. Each expression keeps
+its last few points, boxes and estimators, and answers from them when the inputs match
+bit for bit. `EVAL` also runs the value and gradient program, so the gradient that SCIP
+asks for next is already there. [`HandlerOptions`][jaxcip.HandlerOptions] switches each
+of these off, for measuring what it gains.
+
+## What an opaque term costs
+
+SCIP's own expressions expose structure that a JAX term hides. A product of binaries,
+a quadratic form or a convex sum is detected by SCIP's nonlinear handlers and relaxed
+exactly or linearized. A JAX term gets McCormick relaxations instead, which are weaker
+on such structure, and branching has to make up the difference. The analysis above
+recovers the affine parts and the separable sums. For other structure, write that part
+of the function in a form the analysis splits off, or accept more nodes.
