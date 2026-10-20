@@ -95,6 +95,10 @@ def tree_shape(node: Node, positions: dict[int, int], params: list[float]) -> An
             return ("variable", positions[index])
         case Node("power", (base, Node("number", value=exponent))):
             return ("power", tree_shape(base, positions, params), exponent)
+        case Node("power", (Node("number", value=base), exponent)) if base > 0:
+            # JAXormick relaxes `exp` but not `pow` with a variable exponent.
+            params.append(math.log(base))
+            return ("exponential", tree_shape(exponent, positions, params))
         case Node("signpower", (base, Node("number", value=exponent))):
             return ("signpower", tree_shape(base, positions, params), exponent)
         case Node(operator, children) if (
@@ -124,6 +128,9 @@ def evaluate_tree(shape: Any, x: jax.Array, params: Iterator[jax.Array]) -> jax.
             return next(params) * x[position]
         case ("power", base, float() as exponent):
             return power(evaluate_tree(base, x, params), exponent)
+        case ("exponential", exponent):
+            log_base = next(params)
+            return jnp.exp(log_base * evaluate_tree(exponent, x, params))
         case ("signpower", base, float() as exponent):
             value = evaluate_tree(base, x, params)
             return jnp.sign(value) * power(jnp.abs(value), exponent)

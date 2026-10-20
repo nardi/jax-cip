@@ -34,6 +34,8 @@ SCIP accepts bound violations up to its feasibility tolerance of 1e-6, which mov
 objective near zero by that amount times its coefficients.
 """
 
+ROUNDING_FEASIBILITY_TOLERANCE = 1e-4
+"""Feasibility tolerance of the check of a solution with rounded integer variables."""
 
 OBJECTIVE_CONSTANT_VARIABLE = "objconstvar"
 """Variable that SCIP's OSiL reader fixes to the constant of the objective."""
@@ -106,10 +108,10 @@ def test_instance(
 ) -> None:
     """Solves an instance natively and with JAX terms and checks both results.
 
-    Optimal objectives agree with each other and with the known optimum, a primal solution
-    is feasible for SCIP's own reading of the instance and the dual bound never passes the
-    known optimum. A timeout where native SCIP solved is recorded, not failed. A SCIP error
-    is recorded and fails.
+    An optimal objective agrees with the known optimum, or with native SCIP's if none is
+    known. A primal solution is feasible for SCIP's own reading of the instance and the
+    dual bound never passes the known optimum. A timeout where native SCIP solved is
+    recorded, not failed. A SCIP error is recorded and fails.
     """
     path = directory() / "osil" / f"{name}.osil"
     try:
@@ -160,6 +162,10 @@ def test_instance(
         # Presolving differs from the native solve, so the retransformed values of a row
         # with large coefficients may miss its side by more than the feasibility tolerance.
         reference.set_parameter("constraints/linear/checkrelmaxabs", True)
+        # `Solution.x` rounds integer variables that SCIP left within its integrality
+        # tolerance, which moves a nonlinear row by that tolerance times its
+        # coefficients.
+        reference.set_parameter("numerics/feastol", ROUNDING_FEASIBILITY_TOLERANCE)
         x = np.array(solution.x)
         values = dict(zip(instance.names, x, strict=True))
         objective = instance.objective
@@ -173,9 +179,15 @@ def test_instance(
         assert reference.check_solution(
             np.array([values[item] for item in reference.variable_names])
         )
-    if native.status is jcp.Status.OPTIMAL and solution.status is jcp.Status.OPTIMAL:
-        assert close(solution.objective, native.objective)
-    if known is not None:
+    if known is None:
+        if (
+            native.status is jcp.Status.OPTIMAL
+            and solution.status is jcp.Status.OPTIMAL
+        ):
+            assert close(solution.objective, native.objective)
+    else:
+        # The known optimum decides, since native SCIP misses it on a few instances,
+        # such as `ex1252`.
         if solution.status is jcp.Status.OPTIMAL:
             assert close(solution.objective, known.optimum)
         bound_gap = (solution.dual_bound - known.optimum) * (1 if minimize else -1)
