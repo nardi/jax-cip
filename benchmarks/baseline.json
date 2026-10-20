@@ -1,0 +1,1972 @@
+{
+  "machine_info": {
+    "processor": "x86_64",
+    "machine": "x86_64",
+    "python_compiler": "GCC 13.3.0",
+    "python_implementation": "CPython",
+    "python_implementation_version": "3.11.17",
+    "python_version": "3.11.17",
+    "python_build": [
+      "main",
+      "Oct  1 2026 15:41:07"
+    ],
+    "release": "6.18.44-fc-v139",
+    "system": "Linux",
+    "cpu": {
+      "python_version": "3.11.17.final.0 (64 bit)",
+      "cpuinfo_version": [
+        10,
+        1,
+        1
+      ],
+      "cpuinfo_version_string": "10.1.1",
+      "arch": "X86_64",
+      "bits": 64,
+      "count": 4,
+      "arch_string_raw": "x86_64",
+      "vendor_id_raw": "GenuineIntel",
+      "brand_raw": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+      "hz_advertised_friendly": "2.1000 GHz",
+      "hz_actual_friendly": "2.1000 GHz",
+      "hz_advertised": [
+        2100000000,
+        0
+      ],
+      "hz_actual": [
+        2100000000,
+        0
+      ],
+      "stepping": 2,
+      "model": 207,
+      "family": 6,
+      "flags": [
+        "3dnowprefetch",
+        "abm",
+        "adx",
+        "aes",
+        "amx_bf16",
+        "amx_int8",
+        "amx_tile",
+        "apic",
+        "arat",
+        "arch_capabilities",
+        "avx",
+        "avx2",
+        "avx512_bf16",
+        "avx512_bitalg",
+        "avx512_fp16",
+        "avx512_vbmi2",
+        "avx512_vnni",
+        "avx512_vpopcntdq",
+        "avx512bitalg",
+        "avx512bw",
+        "avx512cd",
+        "avx512dq",
+        "avx512f",
+        "avx512ifma",
+        "avx512vbmi",
+        "avx512vbmi2",
+        "avx512vl",
+        "avx512vnni",
+        "avx512vpopcntdq",
+        "avx_vnni",
+        "bmi1",
+        "bmi2",
+        "cldemote",
+        "clflush",
+        "clflushopt",
+        "clwb",
+        "cmov",
+        "constant_tsc",
+        "cpuid",
+        "cpuid_fault",
+        "cx16",
+        "cx8",
+        "de",
+        "erms",
+        "f16c",
+        "fma",
+        "fpu",
+        "fsgsbase",
+        "fsrm",
+        "fxsr",
+        "gfni",
+        "hle",
+        "ht",
+        "hypervisor",
+        "ibpb",
+        "ibrs",
+        "ibrs_enhanced",
+        "invpcid",
+        "lahf_lm",
+        "lm",
+        "mca",
+        "mce",
+        "md_clear",
+        "mmx",
+        "movbe",
+        "movdir64b",
+        "movdiri",
+        "msr",
+        "mtrr",
+        "nonstop_tsc",
+        "nopl",
+        "nx",
+        "osxsave",
+        "pae",
+        "pat",
+        "pcid",
+        "pclmulqdq",
+        "pdpe1gb",
+        "pge",
+        "pni",
+        "popcnt",
+        "pse",
+        "pse36",
+        "rdpid",
+        "rdrand",
+        "rdrnd",
+        "rdseed",
+        "rdtscp",
+        "rep_good",
+        "rtm",
+        "sep",
+        "serialize",
+        "sha",
+        "sha_ni",
+        "smap",
+        "smep",
+        "ss",
+        "ssbd",
+        "sse",
+        "sse2",
+        "sse4_1",
+        "sse4_2",
+        "ssse3",
+        "stibp",
+        "syscall",
+        "tsc",
+        "tsc_adjust",
+        "tsc_deadline_timer",
+        "tsc_known_freq",
+        "tscdeadline",
+        "tsxldtrk",
+        "umip",
+        "vaes",
+        "vme",
+        "vpclmulqdq",
+        "wbnoinvd",
+        "x2apic",
+        "xgetbv1",
+        "xsave",
+        "xsavec",
+        "xsaveopt",
+        "xsaves",
+        "xtopology"
+      ],
+      "l3_cache_size": 272629760,
+      "l2_cache_size": 8388608,
+      "l1_data_cache_size": 196608,
+      "l1_instruction_cache_size": 131072,
+      "l2_cache_line_size": 2048,
+      "l2_cache_associativity": 7
+    }
+  },
+  "commit_info": {
+    "id": "9680bb91ff4989961eea351491bb521c8145f53a",
+    "branch": "(detached head)"
+  },
+  "benchmarks": [
+    {
+      "group": null,
+      "name": "test_program_time[exponential_sum-value]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[exponential_sum-value]",
+      "params": {
+        "name": "exponential_sum",
+        "program": 0
+      },
+      "param": "exponential_sum-value",
+      "extra_info": {
+        "kind": "program",
+        "name": "exponential_sum.value",
+        "reference": "exponential_sum"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0007475809998140903,
+        "max": 0.0044867779997730395,
+        "mean": 0.0011671372754357668,
+        "stddev": 0.00035078888317213773,
+        "rounds": 639,
+        "median": 0.0011702669999067439,
+        "iqr": 0.0005446362495149515,
+        "q1": 0.0008607427503193321,
+        "q3": 0.0014053789998342836,
+        "iqr_outliers": 7,
+        "stddev_outliers": 107,
+        "outliers": "107;7",
+        "ld15iqr": 0.0007475809998140903,
+        "hd15iqr": 0.0022605650001423783,
+        "ops": 856.7972431748752,
+        "total": 0.745800719003455,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[exponential_sum-value_and_gradient]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[exponential_sum-value_and_gradient]",
+      "params": {
+        "name": "exponential_sum",
+        "program": 1
+      },
+      "param": "exponential_sum-value_and_gradient",
+      "extra_info": {
+        "kind": "program",
+        "name": "exponential_sum.value_and_gradient",
+        "reference": "exponential_sum"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0011119979999421048,
+        "max": 0.005024670000238984,
+        "mean": 0.0015413990128912087,
+        "stddev": 0.00041205365600552367,
+        "rounds": 698,
+        "median": 0.0013683940001101291,
+        "iqr": 0.0006696600003124331,
+        "q1": 0.001237016999766638,
+        "q3": 0.0019066770000790711,
+        "iqr_outliers": 7,
+        "stddev_outliers": 160,
+        "outliers": "160;7",
+        "ld15iqr": 0.0011119979999421048,
+        "hd15iqr": 0.0030287039999166154,
+        "ops": 648.7612822096569,
+        "total": 1.0758965109980636,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[exponential_sum-hessian_vector]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[exponential_sum-hessian_vector]",
+      "params": {
+        "name": "exponential_sum",
+        "program": 2
+      },
+      "param": "exponential_sum-hessian_vector",
+      "extra_info": {
+        "kind": "program",
+        "name": "exponential_sum.hessian_vector",
+        "reference": "exponential_sum"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0008146579993990599,
+        "max": 0.006409184999938589,
+        "mean": 0.001072855380610271,
+        "stddev": 0.0003904722584558706,
+        "rounds": 691,
+        "median": 0.0009083140002985601,
+        "iqr": 0.00046236574985414336,
+        "q1": 0.0008681859997068386,
+        "q3": 0.001330551749560982,
+        "iqr_outliers": 8,
+        "stddev_outliers": 50,
+        "outliers": "50;8",
+        "ld15iqr": 0.0008146579993990599,
+        "hd15iqr": 0.002352351999434177,
+        "ops": 932.0920769686323,
+        "total": 0.7413430680016972,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[exponential_sum-convex]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[exponential_sum-convex]",
+      "params": {
+        "name": "exponential_sum",
+        "program": 3
+      },
+      "param": "exponential_sum-convex",
+      "extra_info": {
+        "kind": "program",
+        "name": "exponential_sum.convex",
+        "reference": "exponential_sum"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.002674803999980213,
+        "max": 0.005734995000238996,
+        "mean": 0.0033546415018566723,
+        "stddev": 0.0006483273649357282,
+        "rounds": 273,
+        "median": 0.0030531219999829773,
+        "iqr": 0.0008646569999655185,
+        "q1": 0.002887274749809876,
+        "q3": 0.0037519317497753946,
+        "iqr_outliers": 5,
+        "stddev_outliers": 64,
+        "outliers": "64;5",
+        "ld15iqr": 0.002674803999980213,
+        "hd15iqr": 0.005059654999968188,
+        "ops": 298.094445992675,
+        "total": 0.9158171300068716,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[exponential_sum-concave]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[exponential_sum-concave]",
+      "params": {
+        "name": "exponential_sum",
+        "program": 4
+      },
+      "param": "exponential_sum-concave",
+      "extra_info": {
+        "kind": "program",
+        "name": "exponential_sum.concave",
+        "reference": "exponential_sum"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.002712637000513496,
+        "max": 0.004781286000252294,
+        "mean": 0.0037112098750092764,
+        "stddev": 0.0007129584401168153,
+        "rounds": 216,
+        "median": 0.003847554999993008,
+        "iqr": 0.0014550079999935406,
+        "q1": 0.0029559280001194566,
+        "q3": 0.004410936000112997,
+        "iqr_outliers": 0,
+        "stddev_outliers": 114,
+        "outliers": "114;0",
+        "ld15iqr": 0.002712637000513496,
+        "hd15iqr": 0.004781286000252294,
+        "ops": 269.4539068603606,
+        "total": 0.8016213330020037,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[exponential_sum-interval]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[exponential_sum-interval]",
+      "params": {
+        "name": "exponential_sum",
+        "program": 5
+      },
+      "param": "exponential_sum-interval",
+      "extra_info": {
+        "kind": "program",
+        "name": "exponential_sum.interval",
+        "reference": "exponential_sum"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0014214259999789647,
+        "max": 0.005613420999907248,
+        "mean": 0.001976228806504205,
+        "stddev": 0.0005732496799220709,
+        "rounds": 584,
+        "median": 0.0016807450001579127,
+        "iqr": 0.0009001325001918303,
+        "q1": 0.0015491369999836024,
+        "q3": 0.0024492695001754328,
+        "iqr_outliers": 10,
+        "stddev_outliers": 53,
+        "outliers": "53;10",
+        "ld15iqr": 0.0014214259999789647,
+        "hd15iqr": 0.0038716270000804798,
+        "ops": 506.0142817009748,
+        "total": 1.1541176229984558,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[exponential_sum-gradient_interval]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[exponential_sum-gradient_interval]",
+      "params": {
+        "name": "exponential_sum",
+        "program": 6
+      },
+      "param": "exponential_sum-gradient_interval",
+      "extra_info": {
+        "kind": "program",
+        "name": "exponential_sum.gradient_interval",
+        "reference": "exponential_sum"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.001459942000110459,
+        "max": 0.0037174319995756377,
+        "mean": 0.0022803533707397763,
+        "stddev": 0.00025202525086867323,
+        "rounds": 383,
+        "median": 0.0023016040004222305,
+        "iqr": 0.00011773050050578604,
+        "q1": 0.0022448252500453236,
+        "q3": 0.0023625557505511097,
+        "iqr_outliers": 50,
+        "stddev_outliers": 50,
+        "outliers": "50;50",
+        "ld15iqr": 0.002115356999638607,
+        "hd15iqr": 0.002553166999859968,
+        "ops": 438.5285249345311,
+        "total": 0.8733753409933342,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[newton_iteration-value]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[newton_iteration-value]",
+      "params": {
+        "name": "newton_iteration",
+        "program": 0
+      },
+      "param": "newton_iteration-value",
+      "extra_info": {
+        "kind": "program",
+        "name": "newton_iteration.value",
+        "reference": "newton_iteration"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0008925020001697703,
+        "max": 0.006220815000233415,
+        "mean": 0.0011146692151675496,
+        "stddev": 0.00031786878491434013,
+        "rounds": 897,
+        "median": 0.0010147270004381426,
+        "iqr": 0.0001724612504858669,
+        "q1": 0.0009644252495490946,
+        "q3": 0.0011368865000349615,
+        "iqr_outliers": 99,
+        "stddev_outliers": 96,
+        "outliers": "96;99",
+        "ld15iqr": 0.0008925020001697703,
+        "hd15iqr": 0.0014093039999352186,
+        "ops": 897.1271354701283,
+        "total": 0.999858286005292,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[newton_iteration-value_and_gradient]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[newton_iteration-value_and_gradient]",
+      "params": {
+        "name": "newton_iteration",
+        "program": 1
+      },
+      "param": "newton_iteration-value_and_gradient",
+      "extra_info": {
+        "kind": "program",
+        "name": "newton_iteration.value_and_gradient",
+        "reference": "newton_iteration"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0014263879993450246,
+        "max": 0.0049921380004889215,
+        "mean": 0.002133555644650187,
+        "stddev": 0.0004929881450642878,
+        "rounds": 560,
+        "median": 0.002302893499745551,
+        "iqr": 0.0009233824998773343,
+        "q1": 0.001626316499823588,
+        "q3": 0.0025496989997009223,
+        "iqr_outliers": 3,
+        "stddev_outliers": 210,
+        "outliers": "210;3",
+        "ld15iqr": 0.0014263879993450246,
+        "hd15iqr": 0.004018118999738363,
+        "ops": 468.7011573883548,
+        "total": 1.1947911610041047,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[newton_iteration-hessian_vector]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[newton_iteration-hessian_vector]",
+      "params": {
+        "name": "newton_iteration",
+        "program": 2
+      },
+      "param": "newton_iteration-hessian_vector",
+      "extra_info": {
+        "kind": "program",
+        "name": "newton_iteration.hessian_vector",
+        "reference": "newton_iteration"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0014562110000042594,
+        "max": 0.004407954000271275,
+        "mean": 0.0020277786847990105,
+        "stddev": 0.0005224116936758927,
+        "rounds": 349,
+        "median": 0.001737024000249221,
+        "iqr": 0.0009327829995982029,
+        "q1": 0.0015723722499387804,
+        "q3": 0.0025051552495369833,
+        "iqr_outliers": 2,
+        "stddev_outliers": 88,
+        "outliers": "88;2",
+        "ld15iqr": 0.0014562110000042594,
+        "hd15iqr": 0.004142833000514656,
+        "ops": 493.1504643462203,
+        "total": 0.7076947609948547,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[newton_iteration-convex]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[newton_iteration-convex]",
+      "params": {
+        "name": "newton_iteration",
+        "program": 3
+      },
+      "param": "newton_iteration-convex",
+      "extra_info": {
+        "kind": "program",
+        "name": "newton_iteration.convex",
+        "reference": "newton_iteration"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.005336377000276116,
+        "max": 0.010757365999779722,
+        "mean": 0.008934832883058238,
+        "stddev": 0.0013152065939440326,
+        "rounds": 171,
+        "median": 0.009473332000197843,
+        "iqr": 0.00035256024989394064,
+        "q1": 0.009248294250028266,
+        "q3": 0.009600854499922207,
+        "iqr_outliers": 33,
+        "stddev_outliers": 27,
+        "outliers": "27;33",
+        "ld15iqr": 0.008938820999901509,
+        "hd15iqr": 0.010757365999779722,
+        "ops": 111.92151135766038,
+        "total": 1.5278564230029588,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[newton_iteration-concave]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[newton_iteration-concave]",
+      "params": {
+        "name": "newton_iteration",
+        "program": 4
+      },
+      "param": "newton_iteration-concave",
+      "extra_info": {
+        "kind": "program",
+        "name": "newton_iteration.concave",
+        "reference": "newton_iteration"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.005338904000382172,
+        "max": 0.015128617000300437,
+        "mean": 0.006827409687129108,
+        "stddev": 0.001830796061106268,
+        "rounds": 163,
+        "median": 0.005867660000149044,
+        "iqr": 0.00270618875015316,
+        "q1": 0.005578076499659801,
+        "q3": 0.008284265249812961,
+        "iqr_outliers": 3,
+        "stddev_outliers": 33,
+        "outliers": "33;3",
+        "ld15iqr": 0.005338904000382172,
+        "hd15iqr": 0.013191492999794718,
+        "ops": 146.4684332456538,
+        "total": 1.1128677790020447,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[newton_iteration-interval]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[newton_iteration-interval]",
+      "params": {
+        "name": "newton_iteration",
+        "program": 5
+      },
+      "param": "newton_iteration-interval",
+      "extra_info": {
+        "kind": "program",
+        "name": "newton_iteration.interval",
+        "reference": "newton_iteration"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0037218839997876785,
+        "max": 0.009406236000359058,
+        "mean": 0.005263149648515339,
+        "stddev": 0.0015157646510574857,
+        "rounds": 239,
+        "median": 0.004198578999421443,
+        "iqr": 0.0030752922505143943,
+        "q1": 0.003924375250107914,
+        "q3": 0.006999667500622309,
+        "iqr_outliers": 0,
+        "stddev_outliers": 85,
+        "outliers": "85;0",
+        "ld15iqr": 0.0037218839997876785,
+        "hd15iqr": 0.009406236000359058,
+        "ops": 190.00029768906268,
+        "total": 1.257892765995166,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[newton_iteration-gradient_interval]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[newton_iteration-gradient_interval]",
+      "params": {
+        "name": "newton_iteration",
+        "program": 6
+      },
+      "param": "newton_iteration-gradient_interval",
+      "extra_info": {
+        "kind": "program",
+        "name": "newton_iteration.gradient_interval",
+        "reference": "newton_iteration"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.00788325600024109,
+        "max": 0.018375568999545067,
+        "mean": 0.01263206989992146,
+        "stddev": 0.00326311013294009,
+        "rounds": 70,
+        "median": 0.013690545499684958,
+        "iqr": 0.006774288999622513,
+        "q1": 0.008108852000077604,
+        "q3": 0.014883140999700117,
+        "iqr_outliers": 0,
+        "stddev_outliers": 29,
+        "outliers": "29;0",
+        "ld15iqr": 0.00788325600024109,
+        "hd15iqr": 0.018375568999545067,
+        "ops": 79.1635898093168,
+        "total": 0.8842448929945022,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[rosenbrock-value]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[rosenbrock-value]",
+      "params": {
+        "name": "rosenbrock",
+        "program": 0
+      },
+      "param": "rosenbrock-value",
+      "extra_info": {
+        "kind": "program",
+        "name": "rosenbrock.value",
+        "reference": "rosenbrock"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0006836059992565424,
+        "max": 0.0028013410001221928,
+        "mean": 0.0008589645929437706,
+        "stddev": 0.00018764588548658633,
+        "rounds": 651,
+        "median": 0.0008005409999896074,
+        "iqr": 7.813375077603268e-05,
+        "q1": 0.0007724647498434933,
+        "q3": 0.000850598500619526,
+        "iqr_outliers": 72,
+        "stddev_outliers": 63,
+        "outliers": "63;72",
+        "ld15iqr": 0.0006836059992565424,
+        "hd15iqr": 0.0009694890004539047,
+        "ops": 1164.1923406561903,
+        "total": 0.5591859500063947,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[rosenbrock-value_and_gradient]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[rosenbrock-value_and_gradient]",
+      "params": {
+        "name": "rosenbrock",
+        "program": 1
+      },
+      "param": "rosenbrock-value_and_gradient",
+      "extra_info": {
+        "kind": "program",
+        "name": "rosenbrock.value_and_gradient",
+        "reference": "rosenbrock"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0010282250004820526,
+        "max": 0.0041652579993751715,
+        "mean": 0.001361826979393564,
+        "stddev": 0.0003617130316072416,
+        "rounds": 777,
+        "median": 0.0011869290001413901,
+        "iqr": 0.0004409319999467698,
+        "q1": 0.001125768500060076,
+        "q3": 0.0015667005000068457,
+        "iqr_outliers": 8,
+        "stddev_outliers": 178,
+        "outliers": "178;8",
+        "ld15iqr": 0.0010282250004820526,
+        "hd15iqr": 0.0023325560005105217,
+        "ops": 734.3076728038612,
+        "total": 1.0581395629887993,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[rosenbrock-hessian_vector]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[rosenbrock-hessian_vector]",
+      "params": {
+        "name": "rosenbrock",
+        "program": 2
+      },
+      "param": "rosenbrock-hessian_vector",
+      "extra_info": {
+        "kind": "program",
+        "name": "rosenbrock.hessian_vector",
+        "reference": "rosenbrock"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0006944289998500608,
+        "max": 0.0016859570005181013,
+        "mean": 0.0010904079377455135,
+        "stddev": 0.00023507334984331066,
+        "rounds": 1157,
+        "median": 0.0012067419993400108,
+        "iqr": 0.00046634150089630566,
+        "q1": 0.0008031329994082625,
+        "q3": 0.0012694745003045682,
+        "iqr_outliers": 0,
+        "stddev_outliers": 455,
+        "outliers": "455;0",
+        "ld15iqr": 0.0006944289998500608,
+        "hd15iqr": 0.0016859570005181013,
+        "ops": 917.0879680751063,
+        "total": 1.261601983971559,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[rosenbrock-convex]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[rosenbrock-convex]",
+      "params": {
+        "name": "rosenbrock",
+        "program": 3
+      },
+      "param": "rosenbrock-convex",
+      "extra_info": {
+        "kind": "program",
+        "name": "rosenbrock.convex",
+        "reference": "rosenbrock"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.001610055000128341,
+        "max": 0.017517541000415804,
+        "mean": 0.0026091557199524685,
+        "stddev": 0.0007813765940487101,
+        "rounds": 500,
+        "median": 0.002711169499434618,
+        "iqr": 0.00019963700015068753,
+        "q1": 0.002598800499981735,
+        "q3": 0.0027984375001324224,
+        "iqr_outliers": 101,
+        "stddev_outliers": 67,
+        "outliers": "67;101",
+        "ld15iqr": 0.0023169720006990246,
+        "hd15iqr": 0.0031451999993805657,
+        "ops": 383.2657408497708,
+        "total": 1.3045778599762343,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[rosenbrock-concave]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[rosenbrock-concave]",
+      "params": {
+        "name": "rosenbrock",
+        "program": 4
+      },
+      "param": "rosenbrock-concave",
+      "extra_info": {
+        "kind": "program",
+        "name": "rosenbrock.concave",
+        "reference": "rosenbrock"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0015852779997658217,
+        "max": 0.003121642000223801,
+        "mean": 0.002500661490094067,
+        "stddev": 0.0003577919462823893,
+        "rounds": 353,
+        "median": 0.0026039900003524963,
+        "iqr": 0.00020664224962274602,
+        "q1": 0.002508451500261799,
+        "q3": 0.002715093749884545,
+        "iqr_outliers": 66,
+        "stddev_outliers": 85,
+        "outliers": "85;66",
+        "ld15iqr": 0.002244653999696311,
+        "hd15iqr": 0.00303735899979074,
+        "ops": 399.89418958196666,
+        "total": 0.8827335060032055,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[rosenbrock-interval]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[rosenbrock-interval]",
+      "params": {
+        "name": "rosenbrock",
+        "program": 5
+      },
+      "param": "rosenbrock-interval",
+      "extra_info": {
+        "kind": "program",
+        "name": "rosenbrock.interval",
+        "reference": "rosenbrock"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.00125099299930298,
+        "max": 0.004205602999718394,
+        "mean": 0.001639026315806883,
+        "stddev": 0.00040338946226653845,
+        "rounds": 228,
+        "median": 0.0014529244999721413,
+        "iqr": 0.00037405750026664464,
+        "q1": 0.0013752085001215164,
+        "q3": 0.001749266000388161,
+        "iqr_outliers": 10,
+        "stddev_outliers": 53,
+        "outliers": "53;10",
+        "ld15iqr": 0.00125099299930298,
+        "hd15iqr": 0.002331780999156763,
+        "ops": 610.1183308382122,
+        "total": 0.37369800000396936,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[rosenbrock-gradient_interval]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[rosenbrock-gradient_interval]",
+      "params": {
+        "name": "rosenbrock",
+        "program": 6
+      },
+      "param": "rosenbrock-gradient_interval",
+      "extra_info": {
+        "kind": "program",
+        "name": "rosenbrock.gradient_interval",
+        "reference": "rosenbrock"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0011103959996034973,
+        "max": 0.005052330000580696,
+        "mean": 0.0015963084240968033,
+        "stddev": 0.0003847381146028179,
+        "rounds": 731,
+        "median": 0.001700251999864122,
+        "iqr": 0.000641554499452468,
+        "q1": 0.0012397190005231096,
+        "q3": 0.0018812734999755776,
+        "iqr_outliers": 5,
+        "stddev_outliers": 215,
+        "outliers": "215;5",
+        "ld15iqr": 0.0011103959996034973,
+        "hd15iqr": 0.0030074249998506275,
+        "ops": 626.4453566144672,
+        "total": 1.1669014580147632,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[six_hump_camel-value]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[six_hump_camel-value]",
+      "params": {
+        "name": "six_hump_camel",
+        "program": 0
+      },
+      "param": "six_hump_camel-value",
+      "extra_info": {
+        "kind": "program",
+        "name": "six_hump_camel.value",
+        "reference": "six_hump_camel"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0006838609997430467,
+        "max": 0.0053638789995602565,
+        "mean": 0.0009235708444490834,
+        "stddev": 0.00033633209092464705,
+        "rounds": 900,
+        "median": 0.0007885335003265936,
+        "iqr": 0.00038968350054346956,
+        "q1": 0.0007414154997604783,
+        "q3": 0.0011310990003039478,
+        "iqr_outliers": 10,
+        "stddev_outliers": 63,
+        "outliers": "63;10",
+        "ld15iqr": 0.0006838609997430467,
+        "hd15iqr": 0.0017185260003316216,
+        "ops": 1082.7539717286193,
+        "total": 0.8312137600041751,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[six_hump_camel-value_and_gradient]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[six_hump_camel-value_and_gradient]",
+      "params": {
+        "name": "six_hump_camel",
+        "program": 1
+      },
+      "param": "six_hump_camel-value_and_gradient",
+      "extra_info": {
+        "kind": "program",
+        "name": "six_hump_camel.value_and_gradient",
+        "reference": "six_hump_camel"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0009828029997152044,
+        "max": 0.00478849600040121,
+        "mean": 0.0011803150921676003,
+        "stddev": 0.00030249904798695866,
+        "rounds": 792,
+        "median": 0.001082667999980913,
+        "iqr": 0.00012647449966607383,
+        "q1": 0.0010389660001237644,
+        "q3": 0.0011654404997898382,
+        "iqr_outliers": 99,
+        "stddev_outliers": 83,
+        "outliers": "83;99",
+        "ld15iqr": 0.0009828029997152044,
+        "hd15iqr": 0.0013695950001419988,
+        "ops": 847.2313932405464,
+        "total": 0.9348095529967395,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[six_hump_camel-hessian_vector]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[six_hump_camel-hessian_vector]",
+      "params": {
+        "name": "six_hump_camel",
+        "program": 2
+      },
+      "param": "six_hump_camel-hessian_vector",
+      "extra_info": {
+        "kind": "program",
+        "name": "six_hump_camel.hessian_vector",
+        "reference": "six_hump_camel"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0007259169997269055,
+        "max": 0.0022464829999080393,
+        "mean": 0.001156753017493011,
+        "stddev": 0.00024148446079190852,
+        "rounds": 685,
+        "median": 0.0012650070002564462,
+        "iqr": 0.00043803925041174807,
+        "q1": 0.000884642749952036,
+        "q3": 0.001322682000363784,
+        "iqr_outliers": 2,
+        "stddev_outliers": 223,
+        "outliers": "223;2",
+        "ld15iqr": 0.0007259169997269055,
+        "hd15iqr": 0.0020584599997164332,
+        "ops": 864.4887758038998,
+        "total": 0.7923758169827124,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[six_hump_camel-convex]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[six_hump_camel-convex]",
+      "params": {
+        "name": "six_hump_camel",
+        "program": 3
+      },
+      "param": "six_hump_camel-convex",
+      "extra_info": {
+        "kind": "program",
+        "name": "six_hump_camel.convex",
+        "reference": "six_hump_camel"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.001472867000302358,
+        "max": 0.002963276000627957,
+        "mean": 0.001875215056303746,
+        "stddev": 0.0003900779342146791,
+        "rounds": 373,
+        "median": 0.0016898759995456203,
+        "iqr": 0.000540853499842342,
+        "q1": 0.0015632504998848162,
+        "q3": 0.0021041039997271582,
+        "iqr_outliers": 2,
+        "stddev_outliers": 82,
+        "outliers": "82;2",
+        "ld15iqr": 0.001472867000302358,
+        "hd15iqr": 0.0029305460002433392,
+        "ops": 533.2721687778625,
+        "total": 0.6994552160012972,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[six_hump_camel-concave]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[six_hump_camel-concave]",
+      "params": {
+        "name": "six_hump_camel",
+        "program": 4
+      },
+      "param": "six_hump_camel-concave",
+      "extra_info": {
+        "kind": "program",
+        "name": "six_hump_camel.concave",
+        "reference": "six_hump_camel"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0014776810003240826,
+        "max": 0.0047382619995914865,
+        "mean": 0.001984963196780314,
+        "stddev": 0.0005008493945954076,
+        "rounds": 564,
+        "median": 0.0017190929997923377,
+        "iqr": 0.0009206444997289509,
+        "q1": 0.0015937480002321536,
+        "q3": 0.0025143924999611045,
+        "iqr_outliers": 4,
+        "stddev_outliers": 150,
+        "outliers": "150;4",
+        "ld15iqr": 0.0014776810003240826,
+        "hd15iqr": 0.003953307999836397,
+        "ops": 503.78767808997065,
+        "total": 1.1195192429840972,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[six_hump_camel-interval]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[six_hump_camel-interval]",
+      "params": {
+        "name": "six_hump_camel",
+        "program": 5
+      },
+      "param": "six_hump_camel-interval",
+      "extra_info": {
+        "kind": "program",
+        "name": "six_hump_camel.interval",
+        "reference": "six_hump_camel"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0010447750000821543,
+        "max": 0.004587964999700489,
+        "mean": 0.0014913254382794324,
+        "stddev": 0.0003844434568536526,
+        "rounds": 778,
+        "median": 0.0013526654997804144,
+        "iqr": 0.0007313469996006461,
+        "q1": 0.0011330910001561278,
+        "q3": 0.001864437999756774,
+        "iqr_outliers": 2,
+        "stddev_outliers": 277,
+        "outliers": "277;2",
+        "ld15iqr": 0.0010447750000821543,
+        "hd15iqr": 0.003086002000600274,
+        "ops": 670.5444528282956,
+        "total": 1.1602511909813984,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_program_time[six_hump_camel-gradient_interval]",
+      "fullname": "benchmarks/test_benchmarks.py::test_program_time[six_hump_camel-gradient_interval]",
+      "params": {
+        "name": "six_hump_camel",
+        "program": 6
+      },
+      "param": "six_hump_camel-gradient_interval",
+      "extra_info": {
+        "kind": "program",
+        "name": "six_hump_camel.gradient_interval",
+        "reference": "six_hump_camel"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0010702339995987131,
+        "max": 0.003610298999774386,
+        "mean": 0.001403719656242298,
+        "stddev": 0.0003551091228657615,
+        "rounds": 704,
+        "median": 0.001187856500109774,
+        "iqr": 0.0007088510001267423,
+        "q1": 0.001134000000092783,
+        "q3": 0.0018428510002195253,
+        "iqr_outliers": 1,
+        "stddev_outliers": 218,
+        "outliers": "218;1",
+        "ld15iqr": 0.0010702339995987131,
+        "hd15iqr": 0.003610298999774386,
+        "ops": 712.3929593441474,
+        "total": 0.9882186379945779,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_machine_reference",
+      "fullname": "benchmarks/test_benchmarks.py::test_machine_reference",
+      "params": null,
+      "param": null,
+      "extra_info": {
+        "kind": "reference",
+        "name": "machine",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.0008506359999955748,
+        "max": 0.007279389000359515,
+        "mean": 0.0011468772894946404,
+        "stddev": 0.0006030569657579357,
+        "rounds": 190,
+        "median": 0.0010080639999614505,
+        "iqr": 0.00014457700035563903,
+        "q1": 0.0009452639997107326,
+        "q3": 0.0010898410000663716,
+        "iqr_outliers": 21,
+        "stddev_outliers": 11,
+        "outliers": "11;21",
+        "ld15iqr": 0.0008506359999955748,
+        "hd15iqr": 0.001341685000625148,
+        "ops": 871.9328642741191,
+        "total": 0.2179066850039817,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_cold_build_time[batched]",
+      "fullname": "benchmarks/test_benchmarks.py::test_cold_build_time[batched]",
+      "params": {
+        "name": "batched"
+      },
+      "param": "batched",
+      "extra_info": {
+        "kind": "cold_build",
+        "name": "batched",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 1.8377922350000517,
+        "max": 2.52311156199994,
+        "mean": 2.1457496813333514,
+        "stddev": 0.3478913287489899,
+        "rounds": 3,
+        "median": 2.076345247000063,
+        "iqr": 0.5139894952499162,
+        "q1": 1.8974304880000545,
+        "q3": 2.4114199832499708,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 1.8377922350000517,
+        "hd15iqr": 2.52311156199994,
+        "ops": 0.4660375852315672,
+        "total": 6.437249044000055,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_cold_build_time[camel]",
+      "fullname": "benchmarks/test_benchmarks.py::test_cold_build_time[camel]",
+      "params": {
+        "name": "camel"
+      },
+      "param": "camel",
+      "extra_info": {
+        "kind": "cold_build",
+        "name": "camel",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 4.735815285999706,
+        "max": 4.78120595099972,
+        "mean": 4.758627605333156,
+        "stddev": 0.022696237023864998,
+        "rounds": 3,
+        "median": 4.75886157900004,
+        "iqr": 0.034042998750010156,
+        "q1": 4.74157685924979,
+        "q3": 4.7756198579998,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 4.735815285999706,
+        "hd15iqr": 4.78120595099972,
+        "ops": 0.2101446221341771,
+        "total": 14.275882815999466,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_cold_build_time[constrained]",
+      "fullname": "benchmarks/test_benchmarks.py::test_cold_build_time[constrained]",
+      "params": {
+        "name": "constrained"
+      },
+      "param": "constrained",
+      "extra_info": {
+        "kind": "cold_build",
+        "name": "constrained",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 2.5852377319997686,
+        "max": 3.4858690000000934,
+        "mean": 2.894281659666376,
+        "stddev": 0.5125009807367696,
+        "rounds": 3,
+        "median": 2.6117382469992663,
+        "iqr": 0.6754734510002436,
+        "q1": 2.591862860749643,
+        "q3": 3.2673363117498866,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 2.5852377319997686,
+        "hd15iqr": 3.4858690000000934,
+        "ops": 0.3455088749431768,
+        "total": 8.682844978999128,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_cold_build_time[mixed_integer]",
+      "fullname": "benchmarks/test_benchmarks.py::test_cold_build_time[mixed_integer]",
+      "params": {
+        "name": "mixed_integer"
+      },
+      "param": "mixed_integer",
+      "extra_info": {
+        "kind": "cold_build",
+        "name": "mixed_integer",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 3.1493992220002838,
+        "max": 3.5581856489998245,
+        "mean": 3.3558684530001606,
+        "stddev": 0.20442484015095855,
+        "rounds": 3,
+        "median": 3.360020488000373,
+        "iqr": 0.30658982024965553,
+        "q1": 3.202054538500306,
+        "q3": 3.5086443587499616,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 3.1493992220002838,
+        "hd15iqr": 3.5581856489998245,
+        "ops": 0.297985458609379,
+        "total": 10.067605359000481,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_warm_build_time[batched]",
+      "fullname": "benchmarks/test_benchmarks.py::test_warm_build_time[batched]",
+      "params": {
+        "name": "batched"
+      },
+      "param": "batched",
+      "extra_info": {
+        "kind": "warm_build",
+        "name": "batched",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.049073155000769475,
+        "max": 0.06389697699978569,
+        "mean": 0.05611012499994104,
+        "stddev": 0.006293162109200274,
+        "rounds": 5,
+        "median": 0.05741372800002864,
+        "iqr": 0.010777764749263952,
+        "q1": 0.050044921000107934,
+        "q3": 0.060822685749371885,
+        "iqr_outliers": 0,
+        "stddev_outliers": 2,
+        "outliers": "2;0",
+        "ld15iqr": 0.049073155000769475,
+        "hd15iqr": 0.06389697699978569,
+        "ops": 17.82209538832877,
+        "total": 0.2805506249997052,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_warm_build_time[camel]",
+      "fullname": "benchmarks/test_benchmarks.py::test_warm_build_time[camel]",
+      "params": {
+        "name": "camel"
+      },
+      "param": "camel",
+      "extra_info": {
+        "kind": "warm_build",
+        "name": "camel",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.1056660459998966,
+        "max": 0.1404392820004432,
+        "mean": 0.12040847020034562,
+        "stddev": 0.014890659080271531,
+        "rounds": 5,
+        "median": 0.1209191070001907,
+        "iqr": 0.025506673999871055,
+        "q1": 0.10614154750055604,
+        "q3": 0.1316482215004271,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 0.1056660459998966,
+        "hd15iqr": 0.1404392820004432,
+        "ops": 8.305063575146473,
+        "total": 0.6020423510017281,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_warm_build_time[constrained]",
+      "fullname": "benchmarks/test_benchmarks.py::test_warm_build_time[constrained]",
+      "params": {
+        "name": "constrained"
+      },
+      "param": "constrained",
+      "extra_info": {
+        "kind": "warm_build",
+        "name": "constrained",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.06772190199990291,
+        "max": 0.10160902700044971,
+        "mean": 0.08248738319998665,
+        "stddev": 0.013114536636132159,
+        "rounds": 5,
+        "median": 0.08113397699980851,
+        "iqr": 0.01897004575016581,
+        "q1": 0.07242084699987572,
+        "q3": 0.09139089275004153,
+        "iqr_outliers": 0,
+        "stddev_outliers": 2,
+        "outliers": "2;0",
+        "ld15iqr": 0.06772190199990291,
+        "hd15iqr": 0.10160902700044971,
+        "ops": 12.123066112735673,
+        "total": 0.41243691599993326,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_warm_build_time[mixed_integer]",
+      "fullname": "benchmarks/test_benchmarks.py::test_warm_build_time[mixed_integer]",
+      "params": {
+        "name": "mixed_integer"
+      },
+      "param": "mixed_integer",
+      "extra_info": {
+        "kind": "warm_build",
+        "name": "mixed_integer",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.07952571999976499,
+        "max": 0.15059131599991815,
+        "mean": 0.10389399060004507,
+        "stddev": 0.02731841704141036,
+        "rounds": 5,
+        "median": 0.0944332460003352,
+        "iqr": 0.02434150275075808,
+        "q1": 0.08968875474965898,
+        "q3": 0.11403025750041706,
+        "iqr_outliers": 1,
+        "stddev_outliers": 1,
+        "outliers": "1;1",
+        "ld15iqr": 0.07952571999976499,
+        "hd15iqr": 0.15059131599991815,
+        "ops": 9.625195781049978,
+        "total": 0.5194699530002254,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_solve_time[batched]",
+      "fullname": "benchmarks/test_benchmarks.py::test_solve_time[batched]",
+      "params": {
+        "name": "batched"
+      },
+      "param": "batched",
+      "extra_info": {
+        "kind": "solve",
+        "name": "batched",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 1.000321812999573,
+        "max": 1.1103667190000124,
+        "mean": 1.0414494269998613,
+        "stddev": 0.06005555750022996,
+        "rounds": 3,
+        "median": 1.0136597489999986,
+        "iqr": 0.08253367950032953,
+        "q1": 1.0036562969996794,
+        "q3": 1.086189976500009,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 1.000321812999573,
+        "hd15iqr": 1.1103667190000124,
+        "ops": 0.9602002498390478,
+        "total": 3.124348280999584,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_solve_time[camel]",
+      "fullname": "benchmarks/test_benchmarks.py::test_solve_time[camel]",
+      "params": {
+        "name": "camel"
+      },
+      "param": "camel",
+      "extra_info": {
+        "kind": "solve",
+        "name": "camel",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.3028306710002653,
+        "max": 0.43198263099930045,
+        "mean": 0.3513262079998943,
+        "stddev": 0.07032637580677743,
+        "rounds": 3,
+        "median": 0.31916532200011716,
+        "iqr": 0.09686396999927638,
+        "q1": 0.30691433375022825,
+        "q3": 0.40377830374950463,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 0.3028306710002653,
+        "hd15iqr": 0.43198263099930045,
+        "ops": 2.8463575367548466,
+        "total": 1.053978623999683,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_solve_time[constrained]",
+      "fullname": "benchmarks/test_benchmarks.py::test_solve_time[constrained]",
+      "params": {
+        "name": "constrained"
+      },
+      "param": "constrained",
+      "extra_info": {
+        "kind": "solve",
+        "name": "constrained",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.4312710979993426,
+        "max": 0.4658521370001836,
+        "mean": 0.4512459149997691,
+        "stddev": 0.0179047039573414,
+        "rounds": 3,
+        "median": 0.45661450999978115,
+        "iqr": 0.02593577925063073,
+        "q1": 0.43760695099945224,
+        "q3": 0.46354273025008297,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 0.4312710979993426,
+        "hd15iqr": 0.4658521370001836,
+        "ops": 2.2160865434106185,
+        "total": 1.3537377449993073,
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_solve_time[mixed_integer]",
+      "fullname": "benchmarks/test_benchmarks.py::test_solve_time[mixed_integer]",
+      "params": {
+        "name": "mixed_integer"
+      },
+      "param": "mixed_integer",
+      "extra_info": {
+        "kind": "solve",
+        "name": "mixed_integer",
+        "reference": "machine"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-06,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.05209959599960712,
+        "max": 0.05373280399999203,
+        "mean": 0.053127970666537294,
+        "stddev": 0.0008951997201753005,
+        "rounds": 3,
+        "median": 0.053551512000012735,
+        "iqr": 0.0012249060002886836,
+        "q1": 0.05246257499970852,
+        "q3": 0.053687480999997206,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 0.05209959599960712,
+        "hd15iqr": 0.05373280399999203,
+        "ops": 18.822476888428398,
+        "total": 0.15938391199961188,
+        "iterations": 1
+      }
+    }
+  ],
+  "datetime": "2026-10-20T08:05:15.737348+00:00",
+  "version": "5.3.0"
+}
