@@ -1,6 +1,6 @@
 """JAX functions as nonlinear expressions in the SCIP optimization solver."""
 
-from jaxcip import _compile
+from jaxcip import _cache, _compile
 from jaxcip._cache import BuildStatistics, initialize
 from jaxcip._compile import CompiledProblem, compile  # noqa: A004
 from jaxcip._options import (
@@ -35,6 +35,8 @@ from jaxcip._types import (
 )
 
 forward_blas()
+# SCIP works in double precision, so arrays made after the import have 64-bit floats.
+_cache.enable_x64()
 
 
 def clear_caches() -> None:

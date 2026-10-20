@@ -108,3 +108,7 @@ covers `jax.numpy` arithmetic and elementary functions, reductions, indexing,
 JAXormick](https://nardi.github.io/jaxormick/guide/supported/) list the rest. Functions
 receive integer and binary variables as floats, so `x.units[0] * x.flow[1]` is a product
 of two floats.
+
+Importing `jaxcip` switches JAX to 64-bit floats with `jax_enable_x64`, since SCIP works
+in double precision. Arrays made before the import stay 32-bit, and their rounded values
+become the coefficients of the problem.
