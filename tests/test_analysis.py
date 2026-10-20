@@ -42,6 +42,9 @@ CASES = {
     ),
     "to_float32": Case(lambda x, p: x[0].astype(jnp.float32) * 1.0, True, 0),
     "to_integer": Case(lambda x, p: x[0].astype(jnp.int32) * 1.0, False, 1),
+    "stack": Case(
+        lambda x, p: jnp.stack([x[0], p[0], x[3]])[jnp.array([2])].sum(), True, 0
+    ),
     "gather": Case(lambda x, p: x[jnp.array([0, 2])].sum(), True, 0),
     "variable_index": Case(
         lambda x, p: jax.lax.dynamic_index_in_dim(

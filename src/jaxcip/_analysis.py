@@ -100,6 +100,7 @@ LINEAR_PRIMITIVES = frozenset(
         "pad",
         "cumsum",
         "split",
+        "stack",
     }
 )
 """Primitives that are linear in all their operands together."""
