@@ -7,6 +7,7 @@ and keeps for every term only the inputs it depends on.
 """
 
 import enum
+import math
 from collections.abc import Callable, Sequence
 from typing import Any, NamedTuple, cast
 
@@ -54,7 +55,11 @@ class Term(NamedTuple):
     """A sum `Σ sign · output` of values of a function, as a jaxpr of its own inputs."""
 
     jaxpr: Jaxpr
-    """The jaxpr computing the summed values from `inputs`, without constants."""
+    """The jaxpr computing the summed values from `inputs`, without constants.
+
+    An input with a selection enters as a vector of only the selected entries, so terms
+    that differ only in the entries they read have the same jaxpr.
+    """
     signs: tuple[float, ...]
     """Sign of each output of `jaxpr` in the sum."""
     inputs: tuple[InputRef, ...]
@@ -156,13 +161,19 @@ def analyse(
     producers = {var: equation for equation in jaxpr.eqns for var in equation.outvars}
     affine: list[tuple[Atom, float]] = []
     nonlinear: list[tuple[Atom, float]] = []
+    known = propagate(
+        jaxpr,
+        [
+            Linearity.AFFINE if origin.origin is Origin.VARIABLE else Linearity.CONSTANT
+            for origin in origins
+        ],
+        (),
+    )
     for atom, sign in summands(output, 1.0, producers):
-        term = subterm(jaxpr, origins, ((atom, sign),))
-        match term.linearity:
-            case Linearity.NONLINEAR:
-                nonlinear.append((atom, sign))
-            case _:
-                affine.append((atom, sign))
+        if isinstance(atom, Var) and known[atom] is Linearity.NONLINEAR:
+            nonlinear.append((atom, sign))
+        else:
+            affine.append((atom, sign))
     groups = [(pair,) for pair in nonlinear] if split_sums else [tuple(nonlinear)]
     return Analysis(
         shape=shape_of(output),
@@ -177,24 +188,33 @@ def shape_of(atom: Atom) -> tuple[int, ...]:
     return tuple(cast(ShapedArray, atom.aval).shape)
 
 
+def dtype_of(atom: Atom) -> np.dtype:
+    """Returns the type of the entries of a value of a jaxpr."""
+    return cast(ShapedArray, atom.aval).dtype
+
+
 def summands(
     atom: Atom, sign: float, producers: dict[Var, JaxprEqn]
 ) -> list[tuple[Atom, float]]:
     """Returns the terms of a value that is a sum, with their signs."""
-    equation = producers.get(atom) if isinstance(atom, Var) else None
-    if equation is None or equation.primitive.name not in SPLIT_PRIMITIVES:
-        return [(atom, sign)]
-    match equation.primitive.name, equation.invars:
-        case "neg", [operand]:
-            return summands(operand, -sign, producers)
-        case "sub", [first, second]:
-            return summands(first, sign, producers) + summands(second, -sign, producers)
-        case _:
-            return [
-                pair
-                for operand in equation.invars
-                for pair in summands(operand, sign, producers)
-            ]
+    pending = [(atom, sign)]
+    terms: list[tuple[Atom, float]] = []
+    # A long chain of additions is deep, so a stack replaces recursion, with operands
+    # pushed in reverse to keep the terms in the order of the sum.
+    while pending:
+        atom, sign = pending.pop()
+        equation = producers.get(atom) if isinstance(atom, Var) else None
+        if equation is None or equation.primitive.name not in SPLIT_PRIMITIVES:
+            terms.append((atom, sign))
+            continue
+        match equation.primitive.name, equation.invars:
+            case "neg", [operand]:
+                pending.append((operand, -sign))
+            case "sub", [first, second]:
+                pending += [(second, -sign), (first, sign)]
+            case _:
+                pending += [(operand, sign) for operand in reversed(equation.invars)]
+    return terms
 
 
 def subterm(
@@ -216,44 +236,127 @@ def subterm(
         linearity_of(pruned, classes, ()),
         default=Linearity.CONSTANT,
     )
+    selections = tuple(read_entries(pruned, var) for var in pruned.invars)
     return Term(
-        jaxpr=pruned,
+        jaxpr=compact(pruned, selections),
         signs=tuple(sign for _, sign in pairs),
         inputs=inputs,
-        selections=tuple(
-            read_entries(pruned, var) if ref.origin is Origin.VARIABLE else None
-            for ref, var in zip(inputs, pruned.invars, strict=True)
-        ),
+        selections=selections,
         linearity=linearity,
     )
+
+
+def compact(jaxpr: Jaxpr, selections: Sequence[tuple[int, ...] | None]) -> Jaxpr:
+    """Returns the jaxpr with each selected input replaced by a vector of its entries.
+
+    `read_entries` selects only inputs read through chains of `slice`, so the end of each
+    chain becomes a slice of the compact vector, or a concatenation where the entries are
+    not evenly spaced in it.
+    """
+    if all(selection is None for selection in selections):
+        return jaxpr
+    sources = {
+        var: {entry: index for index, entry in enumerate(selection)}
+        for var, selection in zip(jaxpr.invars, selections, strict=True)
+        if selection is not None
+    }
+
+    def evaluate(*arguments: Array) -> list[Array]:
+        values: dict[Var, Array] = dict(zip(jaxpr.invars, arguments, strict=True))
+        views = {var: (var, input_entries(var)) for var in sources}
+
+        def read(atom: Atom) -> Any:
+            if isinstance(atom, Literal):
+                return atom.val
+            if atom in views:
+                source, entries = views[atom]
+                return slice_entries(values[source], sources[source], entries)
+            return values[atom]
+
+        for equation in jaxpr.eqns:
+            match equation.primitive.name, equation.invars:
+                case "slice", [Var() as var] if var in views:
+                    source, entries = views[var]
+                    views[equation.outvars[0]] = (source, sliced(entries, equation))
+                    continue
+            outputs = equation.primitive.bind(
+                *map(read, equation.invars), **equation.params
+            )
+            multiple = equation.primitive.multiple_results
+            result = outputs if multiple else [outputs]
+            values.update(zip(equation.outvars, result, strict=True))
+        return [read(atom) for atom in jaxpr.outvars]
+
+    avals = [
+        jax.ShapeDtypeStruct((len(sources[var]),), dtype_of(var))
+        if var in sources
+        else var.aval
+        for var in jaxpr.invars
+    ]
+    closed = jax.make_jaxpr(evaluate)(*avals)
+    assert not closed.consts, "Compacting a jaxpr added constants."
+    return closed.jaxpr
+
+
+def input_entries(var: Var) -> np.ndarray:
+    """Returns the flat index of each entry of an input, in the shape of the input."""
+    shape = shape_of(var)
+    return np.arange(math.prod(shape)).reshape(shape)
+
+
+def sliced(entries: np.ndarray, equation: JaxprEqn) -> np.ndarray:
+    """Returns the entries that a `slice` equation takes from entries of an input."""
+    region = tuple(
+        slice(start, limit, stride)
+        for start, limit, stride in zip(
+            equation.params["start_indices"],
+            equation.params["limit_indices"],
+            equation.params["strides"] or (1,) * entries.ndim,
+            strict=True,
+        )
+    )
+    return entries[region]
+
+
+def slice_entries(
+    vector: Array, position: dict[int, int], entries: np.ndarray
+) -> Array:
+    """Returns the given entries of an input from the vector of its read entries."""
+    indices = [position[int(entry)] for entry in entries.ravel()]
+    steps = set(np.diff(indices).tolist()) or {1}
+    if len(steps) == 1:
+        part = jax.lax.slice(vector, (indices[0],), (indices[-1] + 1,), (steps.pop(),))
+    else:
+        part = jnp.concatenate(
+            [jax.lax.slice(vector, (index,), (index + 1,)) for index in indices]
+        )
+    return part.reshape(entries.shape)
 
 
 def read_entries(jaxpr: Jaxpr, var: Var) -> tuple[int, ...] | None:
     """Returns the flat indices of the entries of an input that a jaxpr reads.
 
-    Only inputs that are read through `slice` alone get a selection, which covers static
-    indexing such as `x[3]` and `x[2:5]`. Any other use reads the whole input.
+    Only inputs that are read through chains of `slice` get a selection, which covers
+    static indexing such as `x[3]`, `x[2:5]` and `x[1:][2]`. Any other use reads the whole
+    input.
     """
     if var in jaxpr.outvars:
         return None
-    shape = shape_of(var)
-    is_read = np.zeros(shape, dtype=bool)
+    views = {var: input_entries(var)}
+    is_read = np.zeros(views[var].size, dtype=bool)
     for equation in jaxpr.eqns:
-        if var not in equation.invars:
-            continue
-        if equation.primitive.name != "slice":
-            return None
-        strides = equation.params["strides"] or (1,) * len(shape)
-        region = tuple(
-            slice(start, limit, stride)
-            for start, limit, stride in zip(
-                equation.params["start_indices"],
-                equation.params["limit_indices"],
-                strides,
-                strict=True,
-            )
-        )
-        is_read[region] = True
+        match equation.primitive.name, equation.invars:
+            case "slice", [Var() as operand] if operand in views:
+                views[equation.outvars[0]] = sliced(views[operand], equation)
+                continue
+        for operand in equation.invars:
+            if operand is var:
+                return None
+            if isinstance(operand, Var) and operand in views:
+                is_read[views[operand].ravel()] = True
+    for atom in jaxpr.outvars:
+        if isinstance(atom, Var) and atom in views:
+            is_read[views[atom].ravel()] = True
     if is_read.all():
         return None
     return tuple(int(index) for index in np.flatnonzero(is_read))
@@ -263,6 +366,17 @@ def linearity_of(
     jaxpr: Jaxpr, inputs: Sequence[Linearity], constants: Sequence[Linearity]
 ) -> list[Linearity]:
     """Returns the linearity of each output of a jaxpr from the linearity of its inputs."""
+    known = propagate(jaxpr, inputs, constants)
+    return [
+        known[atom] if isinstance(atom, Var) else Linearity.CONSTANT
+        for atom in jaxpr.outvars
+    ]
+
+
+def propagate(
+    jaxpr: Jaxpr, inputs: Sequence[Linearity], constants: Sequence[Linearity]
+) -> dict[Var, Linearity]:
+    """Returns the linearity of every value of a jaxpr from the linearity of its inputs."""
     known: dict[Var, Linearity] = dict(zip(jaxpr.constvars, constants, strict=True))
     known.update(zip(jaxpr.invars, inputs, strict=True))
 
@@ -272,7 +386,7 @@ def linearity_of(
     for equation in jaxpr.eqns:
         result = equation_linearity(equation, [read(atom) for atom in equation.invars])
         known.update(zip(equation.outvars, result, strict=True))
-    return [read(atom) for atom in jaxpr.outvars]
+    return known
 
 
 def equation_linearity(equation: JaxprEqn, inputs: list[Linearity]) -> list[Linearity]:
@@ -330,7 +444,12 @@ def evaluate_term(
         Origin.VARIABLE: variables,
         Origin.PARAMETER: parameters,
     }
-    arguments = [sources[ref.origin][ref.index] for ref in term.inputs]
+    arguments = [
+        sources[ref.origin][ref.index]
+        if selection is None
+        else jnp.ravel(sources[ref.origin][ref.index])[np.asarray(selection)]
+        for ref, selection in zip(term.inputs, term.selections, strict=True)
+    ]
     return sum_outputs(term, shape, arguments)
 
 

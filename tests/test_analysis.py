@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from jaxcip._analysis import Linearity, analyse, evaluate_term
+from jaxcip._analysis import Linearity, analyse, evaluate_term, read_entries
 
 WEIGHTS = jnp.array([1.0, -2.0, 0.5, 3.0])
 """An array that functions close over, which becomes a constant of the jaxpr."""
@@ -123,3 +123,72 @@ def test_multiple_outputs() -> None:
 
     with pytest.raises(ValueError, match="one array"):
         analyse(both, VARIABLES, PARAMETERS, split_sums=True)
+
+
+def test_long_sum() -> None:
+    """Checks that a sum longer than Python's recursion limit splits into its terms."""
+
+    def long_sum(x: jax.Array, p: jax.Array) -> jax.Array:
+        total = x[0] ** 2
+        for index in range(1, 1500):
+            total = total + p[0] * x[index % 4]
+        return total
+
+    analysis = analyse(long_sum, VARIABLES, PARAMETERS, split_sums=True)
+    assert analysis.affine is not None
+    assert len(analysis.nonlinear) == 1
+
+
+def test_terms_reading_different_entries_share_a_jaxpr() -> None:
+    """Checks that terms differing only in the entries they read have equal jaxprs."""
+    analysis = analyse(
+        lambda x, p: x[0] * x[2] + x[1] * x[3], VARIABLES, PARAMETERS, split_sums=True
+    )
+    first, second = analysis.nonlinear
+    assert (first.selections, second.selections) == (((0, 2),), ((1, 3),))
+    assert str(first.jaxpr) == str(second.jaxpr)
+
+
+def test_unevenly_spaced_selection() -> None:
+    """Checks a slice whose entries are not evenly spaced among the read entries."""
+
+    def function(x: jax.Array, p: jax.Array) -> jax.Array:
+        return jnp.sum(x[:, :2] ** 2) * x[0, 2]
+
+    variables = (jax.ShapeDtypeStruct((3, 3), jnp.float64),)
+    analysis = analyse(function, variables, PARAMETERS, split_sums=True)
+    (term,) = analysis.nonlinear
+    assert term.selections == ((0, 1, 2, 3, 4, 6, 7),)
+    x = np.random.default_rng(0).uniform(-2, 2, (3, 3))
+    params = np.ones(2)
+    value = evaluate_term(term, analysis.shape, analysis.constants, [x], [params])
+    np.testing.assert_allclose(value, function(jnp.asarray(x), jnp.asarray(params)))
+
+
+def test_chained_slices_select_entries() -> None:
+    """Checks that slices of slices select entries and leave no offsets in the jaxpr."""
+
+    def function(x: jax.Array, p: jax.Array) -> jax.Array:
+        rest = p[1:]
+        return x[0] * x[1] * rest[0] + x[2] * x[3] * rest[1:][1]
+
+    variables = (jax.ShapeDtypeStruct((4,), jnp.float64),)
+    parameters = (jax.ShapeDtypeStruct((4,), jnp.float64),)
+    analysis = analyse(function, variables, parameters, split_sums=True)
+    first, second = analysis.nonlinear
+    assert first.selections == ((0, 1), (1,))
+    assert second.selections == ((2, 3), (3,))
+    assert str(first.jaxpr) == str(second.jaxpr)
+    x = np.random.default_rng(0).uniform(-2, 2, 4)
+    params = np.array([5.0, 2.0, 7.0, 3.0])
+    value = sum(
+        evaluate_term(term, analysis.shape, analysis.constants, [x], [params])
+        for term in analysis.nonlinear
+    )
+    np.testing.assert_allclose(value, function(jnp.asarray(x), jnp.asarray(params)))
+
+
+def test_output_slice_reads_its_entries() -> None:
+    """Checks that a slice returned by a jaxpr counts as read."""
+    closed = jax.make_jaxpr(lambda x: (x[1:][1:2], x[0] ** 2))(jnp.zeros(4))
+    assert read_entries(closed.jaxpr, closed.jaxpr.invars[0]) == (0, 2)

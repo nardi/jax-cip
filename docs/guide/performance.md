@@ -38,10 +38,18 @@ print(again.build)
 assert again.build.lowered == again.build.compiled == again.build.loaded == 0
 ```
 
-The caches key a term by its jaxpr with constants moved into the parameters, so two
-functions that differ only in their numbers share programs. Shapes are part of the key,
-and a new shape compiles again. [`clear_caches`][jaxcip.clear_caches] forgets the terms
-of the process, which is useful for timing the disk cache.
+The caches key a term by its jaxpr with constants moved into the parameters and with
+the entries it reads moved into its inputs. So `x[0] * x[1]` and `x[2] * x[3]` share
+programs, and so do two functions that differ only in their numbers. Shapes are part of
+the key, and a new shape compiles again.
+
+The executables of a term hold about 200 memory mappings, and Linux allows 65,530 per
+process by default. The process therefore keeps only the 64 most recently used terms
+after their problems are gone. A single problem with hundreds of distinct terms can still
+reach the limit, and XLA then fails to compile with "Failed to materialize symbols".
+Raising `vm.max_map_count` with `sysctl` lifts it.
+[`clear_caches`][jaxcip.clear_caches] forgets all terms of the process, which is useful
+for timing the disk cache.
 
 ## Callback time
 

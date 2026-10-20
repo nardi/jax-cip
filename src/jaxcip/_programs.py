@@ -15,7 +15,7 @@ import jaxormick as jmk
 from jax.extend.core import Jaxpr
 from jaxtyping import Array, Float
 
-from jaxcip._analysis import Origin, Term, sum_outputs
+from jaxcip._analysis import Origin, Term, dtype_of, shape_of, sum_outputs
 from jaxcip._options import RelaxationOptions
 from jaxcip._types import Program
 
@@ -57,19 +57,15 @@ class ProgramOptions(NamedTuple):
 
 
 class TermInput(NamedTuple):
-    """Shape and type of one input of a term's jaxpr, and the entries the term reads."""
+    """Shape and type of one input of a term's jaxpr."""
 
     shape: tuple[int, ...]
     dtype: jnp.dtype
-    selection: tuple[int, ...] | None
-    """Flat indices of the entries read, or `None` for all of them."""
     is_variable: bool
 
     @property
     def size(self) -> int:
         """Number of entries the input takes from its flat vector."""
-        if self.selection is not None:
-            return len(self.selection)
         return math.prod(self.shape)
 
 
@@ -90,20 +86,15 @@ class TermSignature(NamedTuple):
         return math.prod(self.shape)
 
 
-def term_signature(
-    term: Term, shape: tuple[int, ...], avals: Sequence[jax.ShapeDtypeStruct]
-) -> TermSignature:
-    """Returns the signature of a term whose jaxpr inputs have the given shapes."""
+def term_signature(term: Term, shape: tuple[int, ...]) -> TermSignature:
+    """Returns the signature of a term with an output of the given shape."""
     inputs = tuple(
         TermInput(
-            shape=tuple(aval.shape),
-            dtype=aval.dtype,
-            selection=selection,
+            shape=shape_of(var),
+            dtype=dtype_of(var),
             is_variable=ref.origin is Origin.VARIABLE,
         )
-        for ref, aval, selection in zip(
-            term.inputs, avals, term.selections, strict=True
-        )
+        for ref, var in zip(term.inputs, term.jaxpr.invars, strict=True)
     )
     num_inputs = sum(item.size for item in inputs if item.is_variable)
     num_params = sum(item.size for item in inputs if not item.is_variable)
@@ -128,9 +119,6 @@ def term_function(term: Term, signature: TermSignature) -> TermFunction:
             else:
                 part = params[param_offset : param_offset + item.size]
                 param_offset += item.size
-            if item.selection is not None:
-                full = jnp.zeros(math.prod(item.shape), x.dtype)
-                part = full.at[jnp.asarray(item.selection)].set(part)
             arguments.append(part.reshape(item.shape).astype(item.dtype))
         total = sum_outputs(term, signature.shape, arguments).ravel()
         if signature.num_entries == 1:
