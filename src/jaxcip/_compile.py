@@ -7,6 +7,7 @@ values, so one compiled problem solves for many of them.
 
 import math
 import time
+from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from typing import Any, NamedTuple
 
@@ -34,8 +35,16 @@ from jaxcip._programs import (
 )
 from jaxcip._types import Domain, Programs
 
-compiled_terms: dict[str, FunctionHandle] = {}
-"""Handles of the terms compiled in this process, by `_cache.term_key`."""
+COMPILED_TERMS_LIMIT = 256
+"""Number of terms whose handles the process keeps after their problems are gone.
+
+Every executable holds memory mappings of its machine code, and Linux allows about 65,000
+mappings per process. A process that compiles many different problems would reach that
+limit if it kept every term.
+"""
+
+compiled_terms: OrderedDict[str, FunctionHandle] = OrderedDict()
+"""Handles of the terms compiled in this process, by `_cache.term_key`, oldest first."""
 
 
 class VariableLayout(NamedTuple):
@@ -374,6 +383,7 @@ def build_handle(
     key = _cache.term_key(str(term.jaxpr), term.signs, signature, programs)
     handle = compiled_terms.get(key)
     if handle is not None:
+        compiled_terms.move_to_end(key)
         return handle, _cache.BuildStatistics(reused=1)
     statistics = _cache.BuildStatistics()
     start = time.perf_counter()
@@ -403,6 +413,9 @@ def build_handle(
         signature.num_inputs, signature.num_params, Programs._make(executables)
     )
     compiled_terms[key] = handle
+    # Problems that still use an evicted handle keep it alive themselves.
+    while len(compiled_terms) > COMPILED_TERMS_LIMIT:
+        compiled_terms.popitem(last=False)
     return handle, statistics
 
 

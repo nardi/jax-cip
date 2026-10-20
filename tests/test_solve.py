@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import jaxcip as jcp
+from jaxcip import _compile
 
 DATA = Path(__file__).parent / "data"
 """Directory of the native counterparts of the test problems."""
@@ -216,12 +217,25 @@ def test_terms_are_reused() -> None:
 def test_disk_cache_after_clearing(cache_directory: Path) -> None:
     """Checks that a build after clearing the caches in memory loads from disk."""
     problem = PROBLEMS["newton"]
+    jcp.clear_caches()
     jcp.compile(problem)
     jcp.clear_caches()
     statistics = jcp.compile(problem).statistics
     assert statistics.reused == statistics.lowered == statistics.compiled == 0
     assert statistics.loaded > 0
     assert any(cache_directory.glob("*.lowered"))
+
+
+def test_compiled_terms_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Checks that the process keeps only the most recently used terms."""
+    jcp.clear_caches()
+    monkeypatch.setattr(_compile, "COMPILED_TERMS_LIMIT", 1)
+    first = jcp.compile(PROBLEMS["newton"])
+    jcp.compile(PROBLEMS["camel"]._replace(constraints=()))
+    assert len(_compile.compiled_terms) == 1
+    again = jcp.compile(PROBLEMS["newton"])
+    assert again.statistics.reused == 0
+    assert jcp.solve(first).status is jcp.Status.OPTIMAL
 
 
 def test_maximize() -> None:
