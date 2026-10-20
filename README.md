@@ -3,10 +3,11 @@
 JAX functions as nonlinear expressions in the [SCIP](https://www.scipopt.org/)
 optimization solver.
 
-JAX-CIP compiles a JAX function into programs for its value, derivatives, interval bounds
-and the McCormick relaxations of [JAXormick](https://nardi.github.io/jaxormick/). SCIP
-calls them through an expression handler while it searches for a global optimum, so a
-mixed-integer nonlinear problem can contain anything JAX traces.
+JAX-CIP compiles a JAX function into programs for its value, derivatives, interval
+bounds and the McCormick relaxations of [JAXormick](https://nardi.github.io/jaxormick/).
+SCIP calls them through an expression handler while it searches for a global optimum, so
+a mixed-integer nonlinear problem can contain anything that JAX traces and JAXormick
+relaxes.
 
 ## Installation
 

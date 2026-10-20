@@ -1,18 +1,18 @@
 # Options
 
-Options are `NamedTuple`s with defaults, so a setting is changed with `_replace` or by
-naming only the fields that differ. Every choice between named alternatives is an
+Options are `NamedTuple`s with defaults, so you change a setting with `_replace` or by
+passing only the fields that differ. Every choice between named alternatives is an
 `Enum`.
 
-## Solving
+## Solve options
 
 [`SolveOptions`][jaxcip.SolveOptions] holds the limits of one solve, the
 [`Emphasis`][jaxcip.Emphasis] of SCIP's predefined settings and the
-[`Verbosity`][jaxcip.Verbosity] of its log. Any other SCIP parameter is set with a
-[`ScipSetting`][jaxcip.ScipSetting]. [`ScipParameter`][jaxcip.ScipParameter] has a member
-for every parameter of SCIP and its default plugins, named after the parameter's path,
-so `numerics/feastol` is `ScipParameter.NUMERICS_FEASTOL`. A value of the wrong type
-raises a `TypeError` before SCIP sees it.
+[`Verbosity`][jaxcip.Verbosity] of its log. A [`ScipSetting`][jaxcip.ScipSetting] sets
+any other SCIP parameter. [`ScipParameter`][jaxcip.ScipParameter] has a member for every
+parameter of SCIP and its default plugins, named after the parameter's path, so
+`numerics/feastol` is `ScipParameter.NUMERICS_FEASTOL`. A value of the wrong type raises
+a `TypeError` before SCIP sees it.
 
 <!-- name: test_options -->
 ```python
@@ -41,25 +41,25 @@ solution = jcp.solve(problem, options=options)
 assert solution.status is jcp.Status.OPTIMAL
 ```
 
-## Compiling
+## Compile options
 
 [`CompileOptions`][jaxcip.CompileOptions] decides how functions become SCIP expressions.
 
 - `split_sums` turns each nonlinear summand into its own term. [JAX functions in
-  SCIP](../theory/jax.md#tracing-and-analysis) explains the trade-off.
-- `gradient_interval_limit` is the size, in jaxpr equations, above which a term goes
-  without the gradient interval program and so without monotonicity.
+  SCIP](../theory/jax.md#jaxpr-analysis) explains the trade-off.
+- `gradient_interval_limit` is the size, in jaxpr equations, above which a term has no
+  gradient interval program and so no monotonicity.
 - `disk_cache` stores lowered programs and executables in `JAXCIP_CACHE_DIR`.
 - `relaxation` and `handler` are the two groups below.
 
-### Relaxations
+### Relaxation options
 
 [`RelaxationOptions`][jaxcip.RelaxationOptions] passes options to
 [JAXormick](https://nardi.github.io/jaxormick/). `alpha_bb` intersects the McCormick
 relaxations with αBB relaxations, which are tighter on small boxes for functions with
 bounded curvature. `tighten_bounds` narrows the intervals of intermediate values. Both
 make every estimator more expensive. [`RelaxationMode`][jaxcip.RelaxationMode] picks
-forward or reverse mode for the subgradients. Reverse mode pays off for terms with many
+forward or reverse mode for the subgradients. Reverse mode is faster for terms with many
 inputs.
 
 <!-- name: test_options -->
@@ -71,10 +71,10 @@ solution = jcp.solve(problem, compile_options=tight)
 assert solution.status is jcp.Status.OPTIMAL
 ```
 
-### The handler
+### Handler options
 
 [`HandlerOptions`][jaxcip.HandlerOptions] switches off parts of the expression handler.
-None of them changes results, so they exist for measuring what each part gains. The
+None of them changes the results. They exist to measure what each part gains. The
 [performance](performance.md) page shows how to read the counters that come with every
 solution.
 
@@ -82,6 +82,6 @@ solution.
 
 [`solve_file`][jaxcip.solve_file] reads a problem file with SCIP's own readers, in any
 format SCIP reads, such as `.cip`, `.lp`, `.mps` or `.osil`, and solves it with the same
-`SolveOptions`. The [comparison with native SCIP](comparison.md) uses it to
-check JAX-CIP against SCIP on the same models. Its `x` follows SCIP's own order of the
+`SolveOptions`. The [comparison with native SCIP](comparison.md) uses it to check
+JAX-CIP against SCIP on the same models. Its `x` follows SCIP's own order of the
 variables, which puts binary variables first, then integers, then continuous ones.

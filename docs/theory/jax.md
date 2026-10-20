@@ -1,12 +1,12 @@
 # JAX functions in SCIP
 
 This page follows a JAX function from `Problem` to the callbacks of SCIP's expression
-handler. JAX itself is described by [Bradbury et al. (2018)](references.md) and its
-tracing design by [Frostig et al. (2018)](references.md). The relaxations come from
+handler. [Bradbury et al. (2018)](references.md) describe JAX itself, and [Frostig et
+al. (2018)](references.md) its tracing design. The relaxations come from
 [JAXormick](https://nardi.github.io/jaxormick/), whose documentation covers McCormick
 relaxations ([McCormick 1976](references.md), [Mitsos et al. 2009](references.md)).
 
-## Tracing and analysis
+## Jaxpr analysis
 
 [`compile`][jaxcip.compile] traces every function of a problem to a jaxpr, with the
 leaves of the variables and of the parameters as inputs. The analysis then splits the
@@ -14,16 +14,16 @@ output at additions, subtractions and negations into summands and classifies eac
 summand as constant, affine or nonlinear in the variables.
 
 - The affine summands go to SCIP as linear coefficients. SCIP propagates and separates
-  linear terms exactly, so they should never hide inside an opaque function. A
-  constraint with no nonlinear summand becomes a plain linear row.
+  linear terms exactly, and inside an opaque function they would only weaken the
+  relaxation. A constraint with no nonlinear summand becomes a plain linear row.
 - Each nonlinear summand becomes a term, a jaxpr of its own inputs. A term keeps only
   the variable entries it reads. Static indexing such as `x[3]` or `x[2:5]` selects
   entries, and any other use of a leaf reads all of it.
 
 With `split_sums=False` in [`CompileOptions`][jaxcip.CompileOptions] the nonlinear
 summands stay one term. Separate terms give SCIP more auxiliary variables and tighter
-relaxations, since each term is relaxed over its own smaller box. They also cost more
-LP rows. The default splits.
+relaxations, since JAXormick relaxes each term over its own smaller box. They also cost
+more LP rows, and splitting is the default.
 
 Every entry of a term's output becomes one SCIP expression, whose children are the
 term's variables. The constraint `lower ≤ affine + Σ terms ≤ upper` then becomes one
@@ -31,9 +31,9 @@ SCIP nonlinear constraint per output entry.
 
 ## The seven programs
 
-A term is a scalar function \(f(x, p)\) of two flat vectors, its variables \(x\) and
-its parameters \(p\). Constants that the function closes over are moved into \(p\), so
-two terms that differ only in their numbers have the same code. JAX-CIP builds seven
+A term is a scalar function \(f(x, p)\) of two flat vectors, its variables \(x\) and its
+parameters \(p\). JAX-CIP moves the constants that the function closes over into \(p\),
+so two terms that differ only in their numbers have the same code. JAX-CIP builds seven
 programs of \(f\):
 
 | Program | Arguments | Result | Callbacks |
@@ -48,10 +48,11 @@ programs of \(f\):
 
 The Hessian-vector product is `jax.jvp` of `jax.grad`. The relaxations come from
 `jaxormick.convex_side` and `jaxormick.concave_side`, and the intervals from
-`jaxormick.interval`, with the options of [`RelaxationOptions`][jaxcip.RelaxationOptions].
-The gradient interval program is the interval extension of `jax.grad`. XLA takes long to
-compile it for large functions, so terms of more than `gradient_interval_limit` jaxpr
-equations go without it and SCIP treats their monotonicity as unknown.
+`jaxormick.interval`, with the options of
+[`RelaxationOptions`][jaxcip.RelaxationOptions]. The gradient interval program is the
+interval extension of `jax.grad`. XLA takes a long time to compile it for large
+functions, so a term with more than `gradient_interval_limit` jaxpr equations has no
+gradient interval program, and SCIP treats its monotonicity as unknown.
 
 ## Estimators from relaxations
 
@@ -66,44 +67,45 @@ f(x) \;\ge\; f^{cv}(x) \;\ge\; f^{cv}(x_0) + s^\top (x - x_0)
 \]
 
 which is a valid underestimator on the whole box. When the local box equals the global
-box, the estimator is marked as globally valid, so SCIP keeps the cut for the whole
-tree. `INITESTIMATES` returns planes at the box center and at the points a quarter and
-three quarters along its diagonal. `REVERSEPROP` uses the planes at the box center. An
-underestimator \(a^\top x + b \le f(x) \le u\) bounds each variable as a linear
-inequality, and so does an overestimator with the lower bound of \(f\).
+box, the handler marks the estimator as globally valid, so SCIP keeps the cut for the
+whole tree. `INITESTIMATES` returns planes at the box center and at the points a quarter
+and three quarters along its diagonal. `REVERSEPROP` uses the planes at the box center.
+Given an upper bound \(u\) on \(f\), an underestimator gives the linear inequality
+\(a^\top x + b \le u\), which bounds each variable. An overestimator does the same with
+the lower bound of \(f\).
 
-Estimators need a finite box. On a node where an input is unbounded, the handler gives
-no estimator and SCIP branches.
+On a node where an input is unbounded, the handler returns no estimator, because the
+relaxations need a finite box, and SCIP branches instead.
 
 ## Execution through PJRT
 
-Each program is exported with `jax.export` to [StableHLO](https://openxla.org/stablehlo)
-and compiled by a PJRT plugin into an executable. The callbacks are C functions that
-run the executables through the [PJRT C API](https://openxla.org/xla/pjrt/pjrt_integration)
-without taking the GIL. The input buffers are 64-byte aligned host memory that the
-plugin reads directly, and outputs are read from the plugin's buffers when it allows
-that, so a call copies nothing.
+JAX-CIP exports each program with `jax.export` to
+[StableHLO](https://openxla.org/stablehlo), and the PJRT plugin compiles it into an
+executable. The callbacks are C functions that run the executables through the [PJRT C
+API](https://openxla.org/xla/pjrt/pjrt_integration) without taking the GIL. The input
+buffers are 64-byte aligned host memory that the plugin reads directly, and the handler
+reads outputs from the plugin's buffers when it allows that, so a call copies nothing.
 
 All expressions of one term share its executables and differ only in their parameter
 vectors and children. A [`BatchedConstraint`][jaxcip.BatchedConstraint] of a thousand
-rows therefore compiles once. Terms are cached in the process by a key of their jaxpr,
-signature and options, and on disk as StableHLO and as executables, so a later process
-skips lowering and compiling.
+rows therefore compiles once. JAX-CIP caches terms in the process, keyed by their jaxpr,
+signature and options. The disk cache stores the StableHLO and the executables, so a
+later process will skip lowering and compiling.
 
 ## Caches in the handler
 
-SCIP often asks for the same thing twice. `BWDIFF` follows `EVAL` at the same point,
-and propagation repeats interval evaluations on unchanged boxes. Each expression keeps
-its last few points, boxes and estimators, and answers from them when the inputs match
-bit for bit. `EVAL` also runs the value and gradient program, so the gradient that SCIP
-asks for next is already there. [`HandlerOptions`][jaxcip.HandlerOptions] switches each
-of these off, for measuring what it gains.
+SCIP often asks for the same result twice, since `BWDIFF` follows `EVAL` at the same
+point and propagation repeats interval evaluations on unchanged boxes. Each expression
+keeps its last few points, boxes and estimators, and answers from them when the inputs
+match bit for bit. `EVAL` also runs the value and gradient program, so the gradient that
+SCIP asks for next is already there. You can switch each of these off in
+[`HandlerOptions`][jaxcip.HandlerOptions] to measure what it gains.
 
-## What an opaque term costs
+## Cost of an opaque term
 
-SCIP's own expressions expose structure that a JAX term hides. A product of binaries,
-a quadratic form or a convex sum is detected by SCIP's nonlinear handlers and relaxed
-exactly or linearized. A JAX term gets McCormick relaxations instead, which are weaker
-on such structure, and branching has to make up the difference. The analysis above
-recovers the affine parts and the separable sums. For other structure, write that part
-of the function in a form the analysis splits off, or accept more nodes.
+SCIP's own expressions expose structure that a JAX term hides. SCIP's nonlinear handlers
+detect a product of binaries, a quadratic form or a convex sum, and relax it exactly or
+linearize it. A JAX term gets McCormick relaxations instead, which are weaker on such
+structure, and branching has to make up the difference. The analysis above recovers the
+affine parts and the separable sums. For other structure, write that part of the
+function in a form the analysis splits off, or accept more nodes.

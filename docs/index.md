@@ -4,12 +4,12 @@ JAX functions as nonlinear expressions in the [SCIP](https://www.scipopt.org/)
 optimization solver.
 
 SCIP finds global optima of mixed-integer nonlinear problems, but it needs each
-nonlinear function as an expression tree of its own operators. JAX-CIP gives SCIP a
-JAX function instead. It compiles the function into programs for its value, gradient,
+nonlinear function as an expression tree of its own operators. JAX-CIP gives SCIP a JAX
+function instead. It compiles the function into programs for its value, gradient,
 Hessian-vector products, interval bounds and the convex and concave relaxations from
 [JAXormick](https://nardi.github.io/jaxormick/), and SCIP calls them through an
-expression handler. Anything JAX traces can then appear in a problem, including loops,
-`lax.scan`, `jnp.linalg` and special functions.
+expression handler. A problem can then contain anything that JAX traces and JAXormick
+relaxes, including `lax.fori_loop`, `lax.scan`, `jnp.linalg` and special functions.
 
 A problem is an immutable description over a pytree of variables:
 
@@ -22,7 +22,8 @@ gives a reference for the same problem written natively.
 
 ## Quick example
 
-The example minimizes the six-hump camel function on a box, inside a disc.
+This example minimizes the six-hump camel function over the part of a box that lies
+inside the unit disc.
 
 <!-- name: test_index -->
 ```python
@@ -55,13 +56,13 @@ assert solution.status is jcp.Status.OPTIMAL
 assert abs(solution.objective - (-1.0316)) < 1e-3
 ```
 
-## How it compares
+## Comparison with native SCIP
 
 On the small instances of [MINLPLib](https://www.minlplib.org/) that SCIP solves
 natively in about a second, JAX-CIP reaches the same optima. It needs more nodes and
 more time, because SCIP sees each JAX term as one opaque function and loses the
-structure it detects in its own expressions. [Comparison with native
-SCIP](guide/comparison.md) has the numbers.
+structure it detects in its own expressions. The [comparison page](guide/comparison.md)
+lists the numbers for every instance.
 
 ## License
 

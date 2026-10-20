@@ -5,12 +5,13 @@
   Software*, 24(4–5), 597–634.
   [doi:10.1080/10556780903087124](https://doi.org/10.1080/10556780903087124)
 - Bradbury, J., Frostig, R., Hawkins, P., Johnson, M. J., Leary, C., Maclaurin, D.,
-  Necula, G., Paszke, A., VanderPlas, J., Wanderman-Milne, S. and Zhang, Q. (2018).
-  JAX: composable transformations of Python+NumPy programs.
+  Necula, G., Paszke, A., VanderPlas, J., Wanderman-Milne, S. and Zhang, Q. (2018). JAX:
+  composable transformations of Python+NumPy programs.
   [GitHub](https://github.com/jax-ml/jax)
 - Bussieck, M. R., Drud, A. S. and Meeraus, A. (2003). MINLPLib, a collection of test
   models for mixed-integer nonlinear programming. *INFORMS Journal on Computing*, 15(1),
-  114–119. [doi:10.1287/ijoc.15.1.114.15159](https://doi.org/10.1287/ijoc.15.1.114.15159)
+  114–119.
+  [doi:10.1287/ijoc.15.1.114.15159](https://doi.org/10.1287/ijoc.15.1.114.15159)
 - Fourer, R., Ma, J. and Martin, K. (2010). OSiL: an instance language for optimization.
   *Computational Optimization and Applications*, 45(1), 181–203.
   [doi:10.1007/s10589-008-9169-6](https://doi.org/10.1007/s10589-008-9169-6)
@@ -26,8 +27,8 @@
   algorithms. *SIAM Journal on Optimization*, 20(2), 573–601.
   [doi:10.1137/080717341](https://doi.org/10.1137/080717341)
 - Vigerske, S. and Gleixner, A. (2018). SCIP: global optimization of mixed-integer
-  nonlinear programs in a branch-and-cut framework. *Optimization Methods and
-  Software*, 33(3), 563–593.
+  nonlinear programs in a branch-and-cut framework. *Optimization Methods and Software*,
+  33(3), 563–593.
   [doi:10.1080/10556788.2017.1335312](https://doi.org/10.1080/10556788.2017.1335312)
 - Wächter, A. and Biegler, L. T. (2006). On the implementation of an interior-point
   filter line-search algorithm for large-scale nonlinear programming. *Mathematical

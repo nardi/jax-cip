@@ -1,16 +1,16 @@
 # Installation
 
 JAX-CIP builds from source with [Meson](https://mesonbuild.com/) and needs a PJRT plugin
-at run time. It is tested on Linux x86-64 with Python 3.11 and 3.13.
+at run time. CI tests it on Linux x86-64 with Python 3.11 and 3.13.
 
 ## SCIP
 
 The extension modules link SCIP 10.1 with SoPlex and Ipopt from the
 [SCIP_jll](https://github.com/JuliaBinaryWrappers/SCIP_jll.jl) binaries that Julia
 publishes. [meson-jll](https://github.com/nardi/meson-jll) turns those packages into
-Meson wraps, and the wraps for every platform are committed under `subprojects`, pinned
-by `meson-jll.lock`. Meson downloads the tarballs it needs on the first build, so no
-system SCIP is required.
+Meson wraps, and the repository commits the wraps for every platform under
+`subprojects`, pinned by `meson-jll.lock`. Meson downloads the tarballs it needs on the
+first build, so you don't need SCIP installed on the system.
 
 ## PJRT plugin
 
@@ -26,7 +26,7 @@ export JAXCIP_PJRT_PLUGIN=~/.cache/jaxcip/pjrt/libpjrt_cpu.so
 ```
 
 [`initialize`][jaxcip.initialize] loads a plugin from a path instead of the environment
-variable. It has to run before the first problem is compiled.
+variable. Call it before compiling the first problem.
 
 ## The package
 
@@ -36,12 +36,12 @@ cd jax-cip
 uv sync
 ```
 
-`uv sync` installs the package in editable mode with the development tools. An editable
-install rebuilds the extension modules when they are imported after a change.
-Development builds trace lines in the Cython modules for coverage, which makes callbacks
-slower. For timing, reinstall the package without tracing. `--no-config` keeps uv from
-adding the coverage setting of `pyproject.toml`, and `uv run --no-sync` keeps it from
-building the package again with it:
+`uv sync` installs the package in editable mode with the development tools, and Meson
+will rebuild the extension modules when you import them after a change. These
+development builds trace lines in the Cython modules for coverage, which makes the
+callbacks several times slower. For timing, reinstall the package without tracing. The
+`--no-config` flag stops uv from adding the coverage setting in `pyproject.toml`, and
+`uv run --no-sync` stops it from rebuilding the package with that setting:
 
 ```bash
 uv pip install --no-config --no-deps --no-build-isolation --reinstall -e . \

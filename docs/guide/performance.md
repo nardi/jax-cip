@@ -6,11 +6,11 @@ the first two.
 
 ## Build time
 
-`solution.build` is a [`BuildStatistics`][jaxcip.BuildStatistics]. A term that is new to
-the process is lowered to StableHLO and compiled by XLA, which takes from a tenth of a
-second to several seconds per program. Both results go to the disk cache, so the next
-process loads executables instead (`loaded`), and a term already compiled in this
-process costs nothing (`reused`).
+`solution.build` is a [`BuildStatistics`][jaxcip.BuildStatistics]. JAX-CIP lowers a term
+that is new to the process to StableHLO, and XLA compiles it, which takes from a tenth
+of a second to several seconds per program. Both results go to the disk cache, so the
+next process will load executables instead (`loaded`), and a term already compiled in
+this process costs nothing (`reused`).
 
 <!-- name: test_performance -->
 ```python
@@ -38,7 +38,7 @@ print(again.build)
 assert again.build.lowered == again.build.compiled == again.build.loaded == 0
 ```
 
-Terms are keyed by their jaxpr with constants moved into the parameters, so two
+The caches key a term by its jaxpr with constants moved into the parameters, so two
 functions that differ only in their numbers share programs. Shapes are part of the key,
 and a new shape compiles again. [`clear_caches`][jaxcip.clear_caches] forgets the terms
 of the process, which is useful for timing the disk cache.

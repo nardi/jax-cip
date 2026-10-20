@@ -3,9 +3,10 @@
 ## Parameters
 
 The second argument of every function is `params`, any pytree of arrays. Data that
-changes between solves belongs there instead of in a closure. [`compile`][jaxcip.compile]
-traces the functions for the structure and shapes of `params`, and the result then solves
-for any values of that layout without tracing or compiling again:
+changes between solves belongs there instead of in a closure.
+[`compile`][jaxcip.compile] traces the functions for the structure and shapes of
+`params`, and the result then solves for any values of that layout without tracing or
+compiling again:
 
 <!-- name: test_parameters -->
 ```python
@@ -55,9 +56,9 @@ assert solution.build.compiled == 0
 ```
 
 `compile` accepts arrays or `jax.ShapeDtypeStruct`s, since it only looks at shapes and
-types. Calling [`solve`][jaxcip.solve] with a `Problem` compiles it on the way. That is
-cheap after the first time, because compiled terms are cached in the process and on
-disk. `solution.build` says what a solve had to build.
+types. Calling [`solve`][jaxcip.solve] with a `Problem` will compile it first. After the
+first time that is cheap, because the process and the disk cache keep the compiled
+terms. `solution.build` counts what the solve had to build.
 
 ## Batched constraints
 
@@ -101,6 +102,5 @@ but every row would then depend on every variable that some row reads, because t
 analysis tracks dependencies per leaf and per static slice. Prefer a `BatchedConstraint`
 for rows over gathered variables.
 
-The parameters of a batched constraint are fixed when it is built. Parameters that
-change between solves go in the `params` of `solve`, which the batched function does not
-see.
+A batched constraint fixes its parameters when you build it. Parameters that change
+between solves go in the `params` of `solve`, which the batched function does not see.

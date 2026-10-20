@@ -31,8 +31,8 @@ variables = Plant(
 )
 ```
 
-SCIP needs finite bounds on the inputs of a nonlinear function to build its
-relaxations. Without them it can only branch until propagation bounds the variables.
+SCIP needs finite bounds on the inputs of a nonlinear function to build its relaxations.
+Without them it can only branch until propagation bounds the variables.
 
 ## Objective and constraints
 
@@ -78,7 +78,7 @@ The last constraint has a vector output, so it gives two rows with their own bou
 Both rows here are affine, so SCIP gets them as linear rows. A problem without an
 objective is a feasibility problem.
 
-## Solving
+## Solutions
 
 [`solve`][jaxcip.solve] compiles the problem and solves it. The result is a
 [`Solution`][jaxcip.Solution], whose `x` has the structure of the variables:
@@ -96,15 +96,15 @@ assert solution.status is jcp.Status.OPTIMAL
 assert isinstance(solution.x, Plant)
 ```
 
-`status` is a [`Status`][jaxcip.Status] and says why SCIP stopped. With a time or node
-limit, `x` is the best solution found so far, `dual_bound` the best proven bound, and
-`gap` the relative distance between them. `x` is `None` when SCIP found no solution.
+`status` is a [`Status`][jaxcip.Status] that records why SCIP stopped. With a time or
+node limit, `x` is the best solution found so far, `dual_bound` the best proven bound,
+and `gap` the relative distance between them. `x` is `None` when SCIP found no solution.
 
-## What a function may contain
+## Supported operations
 
 A function may use anything that `jax.make_jaxpr` traces and JAXormick relaxes. That
 covers `jax.numpy` arithmetic and elementary functions, reductions, indexing,
 `lax.fori_loop`, `lax.scan`, `lax.cond` and linear solves. The [supported operations of
-JAXormick](https://nardi.github.io/jaxormick/guide/supported/) list the rest. Integer and
-binary variables arrive as floats, so `x.units[0] * x.flow[1]` is a product of two
-floats.
+JAXormick](https://nardi.github.io/jaxormick/guide/supported/) list the rest. Functions
+receive integer and binary variables as floats, so `x.units[0] * x.flow[1]` is a product
+of two floats.
