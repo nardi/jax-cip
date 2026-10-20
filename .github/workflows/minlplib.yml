@@ -1,0 +1,58 @@
+name: MINLPLib
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 6"
+  workflow_dispatch:
+
+jobs:
+  minlplib:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      JAXCIP_MINLPLIB_DIR: ${{ github.workspace }}/.minlplib
+      JAXCIP_MINLPLIB_RESULTS: ${{ github.workspace }}/minlplib.jsonl
+      TIER: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'full' || 'quick' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up
+        uses: ./.github/actions/setup
+        with:
+          tracing: "false"
+
+      - name: Cache instances
+        uses: actions/cache@v4
+        with:
+          path: .minlplib
+          key: minlplib-${{ env.TIER }}-${{ hashFiles('tests/minlplib/quick.txt') }}
+
+      # The quick tier downloads only its own instances, the full tier the whole archive.
+      - name: Fetch instances
+        run: |
+          if [ "$TIER" = quick ]; then
+            uv run --no-sync python scripts/fetch_minlplib.py $(cat tests/minlplib/quick.txt)
+          else
+            uv run --no-sync python scripts/fetch_minlplib.py
+          fi
+
+      - name: Solve instances
+        run: uv run --no-sync pytest tests/minlplib --minlplib=$TIER -n auto -q
+
+      - name: Summarize results
+        if: always()
+        run: |
+          if [ -f minlplib.jsonl ]; then
+            uv run --no-sync python benchmarks/minlplib_summary.py minlplib.jsonl >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minlplib-${{ env.TIER }}
+          path: minlplib.jsonl

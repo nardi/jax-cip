@@ -6,6 +6,10 @@ inputs:
     description: Python version to install the project for.
     required: false
     default: ""
+  tracing:
+    description: Whether to build the Cython modules with line tracing for coverage.
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -49,3 +53,12 @@ runs:
         else
           uv sync --locked
         fi
+
+    # `--no-config` drops the coverage setting of `pyproject.toml`. Later steps run with
+    # `uv run --no-sync`, so uv does not build the package again with it.
+    - name: Build without line tracing
+      if: inputs.tracing == 'false'
+      shell: bash
+      run: |
+        uv pip install --no-config --no-deps --no-build-isolation --reinstall -e . \
+          -C setup-args=-Dcoverage=false

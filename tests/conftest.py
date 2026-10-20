@@ -22,6 +22,22 @@ DOMAIN_UPPER = 2.0
 """Upper bound of every coordinate of the test domain."""
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Adds the options that select and limit the MINLPLib instances to solve."""
+    parser.addoption(
+        "--minlplib",
+        choices=("none", "quick", "full"),
+        default="none",
+        help="MINLPLib instances to solve: none, the quick list or every instance",
+    )
+    parser.addoption(
+        "--minlplib-time-limit",
+        type=float,
+        default=60.0,
+        help="time limit in seconds of each MINLPLib solve",
+    )
+
+
 @pytest.fixture(scope="session", autouse=True)
 def runtime(tmp_path_factory: pytest.TempPathFactory) -> Iterator[jcp.RuntimeInfo]:
     """Loads the PJRT plugin named by `JAXCIP_PJRT_PLUGIN`, with a fresh disk cache."""
