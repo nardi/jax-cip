@@ -49,7 +49,7 @@ BINARY: dict[str, Function] = {
 
 VARIADIC: dict[str, Function] = {
     "sum": lambda *operands: sum(operands[1:], operands[0]),
-    "product": lambda *operands: math.prod(operands[1:], start=operands[0]),
+    "product": lambda *operands: jnp.prod(jnp.stack(operands)),
     "max": lambda *operands: jnp.max(jnp.stack(operands)),
     "min": lambda *operands: jnp.min(jnp.stack(operands)),
 }
