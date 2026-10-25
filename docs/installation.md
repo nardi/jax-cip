@@ -1,7 +1,7 @@
 # Installation
 
 JAX-CIP builds from source with [Meson](https://mesonbuild.com/) and needs a PJRT plugin
-at run time. CI tests it on Linux x86-64 with Python 3.11 and 3.13.
+at run time. CI tests it on Linux x86-64 with Python 3.12 and 3.13.
 
 ## SCIP
 
