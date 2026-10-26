@@ -13,13 +13,13 @@ from jaxcip._options import (
 )
 from jaxcip._problem import forward_blas, scip_version
 from jaxcip._problem_types import (
-    BatchedConstraint,
     Constraint,
     ParametricFunction,
     Problem,
     RowFunction,
     Variable,
 )
+from jaxcip._rows import rows
 from jaxcip._scip_parameters import ScipParameter
 from jaxcip._solve import FileSolution, Solution, solve, solve_file
 from jaxcip._types import (
@@ -45,7 +45,6 @@ def clear_caches() -> None:
 
 
 __all__ = [
-    "BatchedConstraint",
     "BuildStatistics",
     "CallbackStatistics",
     "CompileOptions",
@@ -74,6 +73,7 @@ __all__ = [
     "clear_caches",
     "compile",
     "initialize",
+    "rows",
     "scip_version",
     "solve",
     "solve_file",

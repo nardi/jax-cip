@@ -17,7 +17,10 @@ import numpy as np
 from jax._src.interpreters import partial_eval
 from jax.core import ShapedArray
 from jax.extend.core import ClosedJaxpr, Jaxpr, JaxprEqn, Literal, Var, jaxpr_as_fun
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, Int
+
+from jaxcip._problem_types import RowFunction
+from jaxcip._rows import description_of, forget_since, last_number
 
 Atom = Var | Literal
 
@@ -42,6 +45,8 @@ class Origin(enum.Enum):
     """A leaf of the variables."""
     PARAMETER = 2
     """A leaf of the parameters."""
+    GATHER = 3
+    """The variables that the rows of a `rows` term read, as one vector per row."""
 
 
 class InputRef(NamedTuple):
@@ -49,6 +54,15 @@ class InputRef(NamedTuple):
 
     origin: Origin
     index: int
+
+
+class RowSource(NamedTuple):
+    """The variables that each row of a `rows` term reads."""
+
+    leaves: Int[np.ndarray, "rows k"]
+    """The leaf of the variables that each input of each row is an entry of."""
+    entries: Int[np.ndarray, "rows k"]
+    """The flat position of each input of each row in its leaf."""
 
 
 class Term(NamedTuple):
@@ -67,6 +81,14 @@ class Term(NamedTuple):
     selections: tuple[tuple[int, ...] | None, ...]
     """For each input, the flat indices of the entries `jaxpr` reads, or `None` for all."""
     linearity: Linearity
+    gather: RowSource | None = None
+    """For a term of `rows`, the variables of each row, in the single input of origin `GATHER`.
+
+    The term is the scalar function of one row, and the block has one row for each row of the
+    source. Other terms have the entries of their output as rows.
+    """
+    row_axes: tuple[bool, ...] = ()
+    """For a term of `rows`, whether each input has a leading axis with one entry per row."""
 
 
 class Analysis(NamedTuple):
@@ -148,6 +170,21 @@ def analyse(
     With `split_sums`, every nonlinear term of the outer sum is separate. Without it, the
     nonlinear terms form one term.
     """
+    first_number = last_number[0] + 1
+    try:
+        return analyse_function(function, variables, parameters, split_sums)
+    finally:
+        # The descriptions of marked rows are only needed while this analysis reads them.
+        forget_since(first_number)
+
+
+def analyse_function(
+    function: Callable[..., Array],
+    variables: Sequence[jax.ShapeDtypeStruct],
+    parameters: Sequence[jax.ShapeDtypeStruct],
+    split_sums: bool,
+) -> Analysis:
+    """Returns the analysis of a function, which `analyse` wraps to clean up after it."""
     closed = jax.make_jaxpr(function)(*variables, *parameters)
     if len(closed.jaxpr.outvars) != 1:
         raise ValueError("A function of a problem must return one array.")
@@ -175,12 +212,336 @@ def analyse(
         else:
             affine.append((atom, sign))
     groups = [(pair,) for pair in nonlinear] if split_sums else [tuple(nonlinear)]
+    constants = [np.asarray(constant) for constant in closed.consts]
+    shape = shape_of(output)
+    terms: list[Term] = []
+    for group in groups:
+        if not group:
+            continue
+        built = None
+        if split_sums:
+            built = rows_term(jaxpr, origins, group[0], shape, producers, constants)
+        terms.append(built if built is not None else subterm(jaxpr, origins, group))
     return Analysis(
-        shape=shape_of(output),
-        constants=tuple(np.asarray(constant) for constant in closed.consts),
+        shape=shape,
+        constants=tuple(constants),
         affine=subterm(jaxpr, origins, tuple(affine)) if affine else None,
-        nonlinear=tuple(subterm(jaxpr, origins, group) for group in groups if group),
+        nonlinear=tuple(terms),
     )
+
+
+def variable_views(
+    jaxpr: Jaxpr, origins: Sequence[InputRef]
+) -> Callable[[Atom], tuple[np.ndarray, np.ndarray] | None]:
+    """Returns a function that finds which variables the entries of a value are.
+
+    For a value built from variables alone, through reshapes, slices, transposes and
+    concatenations, it returns two arrays of the shape of the value, holding for each entry
+    the leaf of the variables and the flat position in that leaf. Other values give `None`.
+    """
+    initial = {}
+    for var, ref in zip(jaxpr.invars, origins, strict=True):
+        if ref.origin is Origin.VARIABLE:
+            entries = input_entries(var)
+            initial[var] = (np.full(entries.shape, ref.index), entries)
+    return trace_views(jaxpr, initial)
+
+
+def trace_views(
+    jaxpr: Jaxpr, initial: dict[Var, tuple[np.ndarray, np.ndarray]]
+) -> Callable[[Atom], tuple[np.ndarray, np.ndarray] | None]:
+    """Returns the function of `variable_views` for a jaxpr whose inputs have known views."""
+    producers = {var: equation for equation in jaxpr.eqns for var in equation.outvars}
+    known: dict[Var, tuple[np.ndarray, np.ndarray] | None] = dict(initial)
+
+    def view(atom: Atom) -> tuple[np.ndarray, np.ndarray] | None:
+        if isinstance(atom, Literal):
+            return None
+        if atom not in known:
+            known[atom] = compute(atom)
+        return known[atom]
+
+    def compute(var: Var) -> tuple[np.ndarray, np.ndarray] | None:
+        equation = producers.get(var)
+        if equation is None:
+            return None
+        name = equation.primitive.name
+        if name in CALL_PRIMITIVES:
+            return through_call(equation, var)
+        if name not in VIEW_PRIMITIVES:
+            return None
+        operands = [view(operand) for operand in equation.invars]
+        if any(operand is None for operand in operands):
+            return None
+        parts = [operand for operand in operands if operand is not None]
+        parameters = equation.params
+        match name:
+            case "concatenate":
+                axis = parameters["dimension"]
+                return (
+                    np.concatenate([part[0] for part in parts], axis=axis),
+                    np.concatenate([part[1] for part in parts], axis=axis),
+                )
+            case "stack":
+                axis = parameters["axis"]
+                return (
+                    np.stack([part[0] for part in parts], axis=axis),
+                    np.stack([part[1] for part in parts], axis=axis),
+                )
+            case "reshape" if parameters["dimensions"] is None:
+                shape = tuple(parameters["new_sizes"])
+                return parts[0][0].reshape(shape), parts[0][1].reshape(shape)
+            case "squeeze":
+                axes = tuple(parameters["dimensions"])
+                return np.squeeze(parts[0][0], axes), np.squeeze(parts[0][1], axes)
+            case "broadcast_in_dim":
+                shape = tuple(parameters["shape"])
+                expanded = [1] * len(shape)
+
+                def widen(array: np.ndarray) -> np.ndarray:
+                    for axis, target in zip(
+                        range(array.ndim),
+                        parameters["broadcast_dimensions"],
+                        strict=True,
+                    ):
+                        expanded[target] = array.shape[axis]
+                    return np.broadcast_to(array.reshape(expanded), shape)
+
+                return widen(parts[0][0]), widen(parts[0][1])
+            case "slice":
+                return sliced(parts[0][0], equation), sliced(parts[0][1], equation)
+            case "transpose":
+                axes = tuple(parameters["permutation"])
+                return np.transpose(parts[0][0], axes), np.transpose(parts[0][1], axes)
+            case "rev":
+                axes = tuple(parameters["dimensions"])
+                return np.flip(parts[0][0], axes), np.flip(parts[0][1], axes)
+            case "convert_element_type" if jnp.issubdtype(
+                parameters["new_dtype"], jnp.floating
+            ):
+                return parts[0]
+            case "copy" | "copy_p":
+                return parts[0]
+        return None
+
+    def through_call(
+        equation: JaxprEqn, var: Var
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        """Returns the view of an output of a call, from the views of its operands."""
+        body = next(
+            equation.params[key]
+            for key in SUBJAXPR_PARAMETERS
+            if key in equation.params
+        )
+        operand_views = {
+            inner: operand_view
+            for inner, operand in zip(body.jaxpr.invars, equation.invars, strict=True)
+            if (operand_view := view(operand)) is not None
+        }
+        inner_view = trace_views(body.jaxpr, operand_views)
+        return inner_view(body.jaxpr.outvars[equation.outvars.index(var)])
+
+    return view
+
+
+VIEW_PRIMITIVES = frozenset(
+    {
+        "concatenate",
+        "stack",
+        "reshape",
+        "squeeze",
+        "broadcast_in_dim",
+        "slice",
+        "transpose",
+        "rev",
+        "convert_element_type",
+        "copy",
+        "copy_p",
+    }
+)
+"""Primitives that move the entries of a value around without changing them."""
+
+
+def rows_term(
+    jaxpr: Jaxpr,
+    origins: Sequence[InputRef],
+    pair: tuple[Atom, float],
+    shape: tuple[int, ...],
+    producers: dict[Var, JaxprEqn],
+    constants: list[np.ndarray],
+) -> Term | None:
+    """Returns the term of `rows` that a nonlinear value is, or `None` if it is not one.
+
+    The value has to be the result of the marked call itself, for the whole output. The
+    vector it reads has to be made of variables alone, and each parameter of the rows an
+    input of the function. Otherwise the value is an ordinary term. The constants that the
+    row function closes over are appended to `constants`.
+    """
+    atom, sign = pair
+    equation = producers.get(atom) if isinstance(atom, Var) else None
+    description = None if equation is None else description_of(equation)
+    if equation is None or description is None or shape_of(atom) != shape:
+        return None
+    vector, *row_parameters = equation.invars
+    view = variable_views(jaxpr, origins)(vector)
+    references = dict(zip(jaxpr.invars, origins, strict=True))
+    parameter_refs = [
+        references.get(operand) if isinstance(operand, Var) else None
+        for operand in row_parameters
+    ]
+    if (
+        view is None
+        or view[0].ndim != 1
+        or any(ref is None or ref.origin is Origin.VARIABLE for ref in parameter_refs)
+    ):
+        return None
+    inputs_per_row = description.inputs.shape[1]
+    row_avals = [
+        jax.ShapeDtypeStruct(shape_of(operand)[1:], dtype_of(operand))
+        for operand in row_parameters
+    ]
+
+    def row(entries: Array, *parameters: Array) -> Array:
+        return description.function(
+            entries, jax.tree.unflatten(description.structure, parameters)
+        )
+
+    closed = jax.make_jaxpr(row)(
+        jax.ShapeDtypeStruct((inputs_per_row,), jnp.float64), *row_avals
+    )
+    own_constants = [
+        InputRef(Origin.CONSTANT, len(constants) + index)
+        for index in range(len(closed.consts))
+    ]
+    constants.extend(np.asarray(constant) for constant in closed.consts)
+    refs = [
+        *own_constants,
+        InputRef(Origin.GATHER, 0),
+        *(ref for ref in parameter_refs if ref is not None),
+    ]
+    leaves, entries = view
+    return Term(
+        jaxpr=partial_eval.convert_constvars_jaxpr(closed.jaxpr),
+        signs=(sign,),
+        inputs=tuple(refs),
+        selections=(None,) * len(refs),
+        linearity=Linearity.NONLINEAR,
+        gather=RowSource(
+            leaves=leaves[description.inputs], entries=entries[description.inputs]
+        ),
+        row_axes=(
+            *(False,) * len(own_constants),
+            True,
+            *(True,) * len(row_parameters),
+        ),
+    )
+
+
+class RowPiece(NamedTuple):
+    """One nonlinear term of the function of `rows`, as a function of the entries it reads."""
+
+    function: RowFunction
+    """The function of the entries in `columns` and of the leaves in `leaves`."""
+    columns: Int[np.ndarray, " k"]
+    """The positions among the entries of a row that the function reads."""
+    leaves: tuple[int, ...]
+    """The parameters of a row that the function reads, as positions among the leaves."""
+    structure: jax.tree_util.PyTreeDef
+    """Structure of the parameters of the function, which is a list of leaves."""
+
+
+class RowSplit(NamedTuple):
+    """The function of `rows` as an affine part and nonlinear pieces, which sum to it."""
+
+    affine: Callable[..., Array] | None
+    """The affine part, as a function of the entries and the leaves of one row."""
+    pieces: tuple[RowPiece, ...]
+
+
+def split_rows(
+    function: RowFunction,
+    structure: jax.tree_util.PyTreeDef,
+    width: int,
+    row_avals: Sequence[jax.ShapeDtypeStruct],
+) -> RowSplit:
+    """Splits the function of one row like the analysis splits any function.
+
+    Each nonlinear summand reads only its own entries and parameters, so SCIP gets it with
+    only the variables that it needs, and the affine part becomes linear rows. A function
+    that is a single term over all of its inputs stays as it is.
+    """
+
+    def flat(entries: Array, *leaves: Array) -> Array:
+        return jnp.asarray(function(entries, jax.tree.unflatten(structure, leaves)))
+
+    analysis = analyse(
+        flat, [jax.ShapeDtypeStruct((width,), jnp.float64)], row_avals, True
+    )
+    if analysis.shape != ():
+        raise ValueError(
+            f"The function of rows must return a scalar, not shape {analysis.shape}."
+        )
+    constants = analysis.constants
+    affine = None
+    if analysis.affine is not None:
+        affine_term = analysis.affine
+
+        def affine(entries: Array, *leaves: Array) -> Array:
+            return evaluate_term(affine_term, (), constants, [entries], leaves)
+
+    pieces = []
+    for term in analysis.nonlinear:
+        used = sorted(
+            {ref.index for ref in term.inputs if ref.origin is Origin.PARAMETER}
+        )
+        selection = next(
+            selection
+            for ref, selection in zip(term.inputs, term.selections, strict=True)
+            if ref.origin is Origin.VARIABLE
+        )
+        columns = np.arange(width) if selection is None else np.asarray(selection)
+        pieces.append(
+            RowPiece(
+                function=piece_function(term, constants, used),
+                columns=columns,
+                leaves=tuple(used),
+                structure=jax.tree.structure(list(used)),
+            )
+        )
+    if (
+        affine is None
+        and len(pieces) == 1
+        and len(pieces[0].columns) == width
+        and len(pieces[0].leaves) == len(row_avals)
+    ):
+        return RowSplit(
+            None, (pieces[0]._replace(function=function, structure=structure),)
+        )
+    return RowSplit(affine, tuple(pieces))
+
+
+def piece_function(
+    term: Term, constants: Sequence[np.ndarray], used: Sequence[int]
+) -> RowFunction:
+    """Returns the function of the entries and the used leaves of a row that is a term."""
+
+    def evaluate(entries: Array, leaves: Sequence[Array]) -> Array:
+        arguments = []
+        for ref, selection in zip(term.inputs, term.selections, strict=True):
+            if ref.origin is Origin.VARIABLE:
+                arguments.append(entries)
+                continue
+            value = (
+                constants[ref.index]
+                if ref.origin is Origin.CONSTANT
+                else leaves[used.index(ref.index)]
+            )
+            arguments.append(
+                value if selection is None else jnp.ravel(value)[np.asarray(selection)]
+            )
+        return sum_outputs(term, (), arguments)
+
+    return evaluate
 
 
 def shape_of(atom: Atom) -> tuple[int, ...]:

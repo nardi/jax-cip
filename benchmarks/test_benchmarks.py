@@ -155,20 +155,18 @@ def mixed_integer() -> jcp.Problem:
 
 
 def batched() -> jcp.Problem:
-    """Returns the batched example of the guide, 100 rows over 20 variables."""
+    """Returns the example of the guide with rows, 100 rows over 20 variables."""
     rng = np.random.default_rng(0)
-    rows = 100
+    count = 100
+    row = jcp.rows(
+        lambda x, weight: weight[0] * x[0] ** 2 + jnp.exp(weight[1] * x[1]),
+        rng.integers(0, 20, size=(count, 2)),
+        rng.uniform(0.5, 2.0, size=(count, 2)),
+    )
     return jcp.Problem(
         variables=jcp.Variable(lower=0.0, upper=3.0, shape=(20,)),
         objective=lambda x, params: -jnp.sum(x),
-        constraints=(
-            jcp.BatchedConstraint(
-                lambda x, weight: weight[0] * x[0] ** 2 + jnp.exp(weight[1] * x[1]),
-                inputs=rng.integers(0, 20, size=(rows, 2)),
-                params=rng.uniform(0.5, 2.0, size=(rows, 2)),
-                upper=10.0,
-            ),
-        ),
+        constraints=(jcp.Constraint(lambda x, params: row(x), upper=10.0),),
     )
 
 

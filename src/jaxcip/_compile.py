@@ -26,7 +26,6 @@ from jaxcip._analysis import Analysis, Origin, Term, analyse, evaluate_term
 from jaxcip._handler import FunctionHandle
 from jaxcip._options import CompileOptions
 from jaxcip._problem_types import (
-    BatchedConstraint,
     Constraint,
     ParametricFunction,
     Problem,
@@ -278,17 +277,15 @@ class HandleBuilder:
 class Block(NamedTuple):
     """Rows of a problem that come from one function.
 
-    A `Constraint` or the objective has one row per entry of its output and the same
-    inputs in every row. A `BatchedConstraint` has one row per batch entry, each with its
-    own inputs and parameters.
+    A `Constraint` or the objective has one row per entry of its output. The terms of a row
+    read the variables of the function, or for terms of `rows` the variables of their own
+    row.
     """
 
     analysis: Analysis
     terms: tuple[CompiledTerm, ...]
     lower: Float[np.ndarray, " rows"]
     upper: Float[np.ndarray, " rows"]
-    batch: BatchedConstraint | None
-    """The batched constraint of the block, with `inputs` and `params` as arrays."""
     affine: "AffineFunction | None"
     """Maps parameter leaves to the constants and the Jacobian entries of the affine part."""
 
@@ -305,17 +302,13 @@ class AffineValues(NamedTuple):
     rows: Int[np.ndarray, " nnz"]
     """Row of each entry."""
     columns: Int[np.ndarray, " nnz"]
-    """Column of each entry among the inputs of its row.
-
-    In a block of one function, this is a variable index. In a batched block, it is a
-    position in the inputs of the row.
-    """
+    """Variable index of each entry."""
     values: Float[np.ndarray, " nnz"]
     """Coefficient of each entry, which may be zero."""
 
 
 AffineFunction = Callable[[Sequence[np.ndarray]], AffineValues]
-"""Maps parameter leaves, with a leading row axis in a batched block, to `AffineValues`."""
+"""Maps parameter leaves to `AffineValues`."""
 
 
 class LinearRows(NamedTuple):
@@ -397,14 +390,9 @@ def compile(  # noqa: A001
                             builder,
                         )
                     )
-                case BatchedConstraint():
-                    requests.append(
-                        batched_block(constraint, variables, options, builder)
-                    )
                 case _:
                     raise TypeError(
-                        "A constraint must be a Constraint or a BatchedConstraint, "
-                        f"not {type(constraint).__name__}."
+                        f"A constraint must be a Constraint, not {type(constraint).__name__}."
                     )
         statistics = _cache.BuildStatistics()
         objective = None
@@ -512,56 +500,6 @@ def function_block(
             terms=(),
             lower=row_bounds(lower, analysis.shape),
             upper=row_bounds(upper, analysis.shape),
-            batch=None,
-            affine=affine,
-        ),
-        terms,
-    )
-
-
-def batched_block(
-    constraint: BatchedConstraint,
-    variables: VariableLayout,
-    options: CompileOptions,
-    builder: HandleBuilder,
-) -> RequestedBlock:
-    """Returns the block of a batched constraint."""
-    inputs = np.asarray(constraint.inputs, dtype=np.intc)
-    if inputs.ndim != 2:
-        raise ValueError(
-            f"The inputs of a batched constraint need two axes, not {inputs.ndim}."
-        )
-    rows, width = inputs.shape
-    if np.any(inputs < 0) or np.any(inputs >= variables.size):
-        raise IndexError("The inputs of a batched constraint index missing variables.")
-    leaves, structure = jax.tree.flatten(constraint.params)
-    arrays = [np.asarray(leaf) for leaf in leaves]
-    if any(array.ndim == 0 or array.shape[0] != rows for array in arrays):
-        raise ValueError(f"Every parameter of a batched constraint needs {rows} rows.")
-    row_avals = [jax.ShapeDtypeStruct(array.shape[1:], array.dtype) for array in arrays]
-
-    def flat(x: Array, *row_params: Array) -> Array:
-        return jnp.asarray(
-            constraint.function(x, jax.tree.unflatten(structure, list(row_params)))
-        )
-
-    variable_avals = [jax.ShapeDtypeStruct((width,), jnp.float64)]
-    analysis = analyse(flat, variable_avals, row_avals, options.split_sums)
-    if analysis.shape != ():
-        raise ValueError(
-            f"The function of a batched constraint must return a scalar, not {analysis.shape}."
-        )
-    terms = request_terms(analysis, builder)
-    affine = None
-    if analysis.affine is not None:
-        affine = batched_affine_function(analysis, variable_avals[0])
-    return RequestedBlock(
-        Block(
-            analysis=analysis,
-            terms=(),
-            lower=row_bounds(constraint.lower, (rows,)),
-            upper=row_bounds(constraint.upper, (rows,)),
-            batch=constraint._replace(inputs=inputs, params=arrays),
             affine=affine,
         ),
         terms,
@@ -600,8 +538,11 @@ def request_terms(
     analysis: Analysis, builder: HandleBuilder
 ) -> tuple[RequestedTerm, ...]:
     """Starts building the programs of the nonlinear terms of an analysis."""
+    # A term of `rows` is the function of one row, so its value is a scalar.
     return tuple(
-        builder.request(term, term_signature(term, analysis.shape))
+        builder.request(
+            term, term_signature(term, () if term.gather else analysis.shape)
+        )
         for term in analysis.nonlinear
     )
 
@@ -651,41 +592,6 @@ def sparse_affine_function(
     return evaluate
 
 
-def batched_affine_function(
-    analysis: Analysis, variable_aval: jax.ShapeDtypeStruct
-) -> AffineFunction:
-    """Returns a function from per-row parameters to the constants and Jacobian of the affine part.
-
-    Every row of a batched block reads only its own few inputs, so its Jacobian is stored
-    densely. The parameter leaves have a leading row axis.
-    """
-    affine = analysis.affine
-    assert affine is not None
-    zeros = [jnp.zeros(variable_aval.shape, variable_aval.dtype)]
-
-    def one(params: Sequence[Array]) -> tuple[Array, Array]:
-        def value(leaves: list[Array]) -> Array:
-            return evaluate_term(
-                affine, analysis.shape, analysis.constants, leaves, params
-            ).ravel()
-
-        return value(zeros), jax.jacfwd(value)(zeros)[0].reshape(1, -1)
-
-    batch = jax.jit(jax.vmap(lambda *row: one(row)))
-
-    def evaluate(leaves: Sequence[np.ndarray]) -> AffineValues:
-        constants, jacobians = batch(*[jnp.asarray(leaf) for leaf in leaves])
-        rows, width = jacobians.shape[0], jacobians.shape[-1]
-        return AffineValues(
-            constants=np.asarray(constants[:, 0], np.float64),
-            rows=np.repeat(np.arange(rows), width),
-            columns=np.tile(np.arange(width), rows),
-            values=np.asarray(jacobians[:, 0, :], np.float64).ravel(),
-        )
-
-    return evaluate
-
-
 def term_rows(
     compiled: CompiledTerm,
     block: Block,
@@ -694,32 +600,43 @@ def term_rows(
 ) -> tuple[Int[np.ndarray, "rows n"], Float[np.ndarray, "rows m"]]:
     """Returns the input indices and the parameter values of a term in every row of a block.
 
-    The rows of a batched block take their parameters from the block itself.
+    A term of `rows` reads its own variables in every row and takes the row's slice of the
+    inputs that have a row axis. Other terms read the same inputs in every row.
     """
     rows = block.rows
-    leaves = param_leaves if block.batch is None else block.batch.params
     index_parts: list[np.ndarray] = []
     param_parts: list[np.ndarray] = []
     term = compiled.term
-    for ref, selection in zip(term.inputs, term.selections, strict=True):
-        match ref.origin, block.batch:
-            case Origin.VARIABLE, None:
+    for position, (ref, selection) in enumerate(
+        zip(term.inputs, term.selections, strict=True)
+    ):
+        shared = 1 if not term.row_axes or not term.row_axes[position] else rows
+        match ref.origin:
+            case Origin.VARIABLE:
                 part = variables.indices(ref.index)[None]
-            case Origin.VARIABLE, batch:
-                part = np.asarray(batch.inputs)
-            case Origin.CONSTANT, _:
-                part = np.asarray(block.analysis.constants[ref.index], np.float64)
-                part = part.reshape(1, -1)
-            case Origin.PARAMETER, None:
-                part = np.asarray(leaves[ref.index], np.float64).reshape(1, -1)
-            case Origin.PARAMETER, _:
-                part = np.asarray(leaves[ref.index], np.float64).reshape(rows, -1)
+            case Origin.GATHER:
+                assert term.gather is not None
+                part = (
+                    np.asarray(variables.offsets)[term.gather.leaves]
+                    + term.gather.entries
+                )
+            case Origin.CONSTANT:
+                constant = np.asarray(block.analysis.constants[ref.index], np.float64)
+                part = constant.reshape(shared, -1)
+            case Origin.PARAMETER:
+                part = np.asarray(param_leaves[ref.index], np.float64).reshape(
+                    shared, -1
+                )
             case _:
                 raise AssertionError(f"Unknown input origin {ref.origin}.")
         if selection is not None:
             part = part[:, list(selection)]
         part = np.broadcast_to(part, (rows, part.shape[1]))
-        parts = index_parts if ref.origin is Origin.VARIABLE else param_parts
+        parts = (
+            index_parts
+            if ref.origin in (Origin.VARIABLE, Origin.GATHER)
+            else param_parts
+        )
         parts.append(part)
     if compiled.signature.num_entries > 1:
         param_parts.append(np.arange(rows, dtype=np.float64)[:, None])
@@ -746,12 +663,9 @@ def linear_rows(
             np.zeros(0, np.intc),
             np.zeros(0),
         )
-    leaves = param_leaves if block.batch is None else block.batch.params
-    entries = block.affine(leaves)
+    entries = block.affine(param_leaves)
     used = entries.values != 0.0
     entry_rows, columns = entries.rows[used], entries.columns[used]
-    if block.batch is not None:
-        columns = np.asarray(block.batch.inputs)[entry_rows, columns]
     order = np.argsort(entry_rows, kind="stable")
     pointers = np.zeros(rows + 1, np.intp)
     np.cumsum(np.bincount(entry_rows, minlength=rows), out=pointers[1:])

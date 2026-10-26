@@ -10,7 +10,7 @@
 
 ::: jaxcip.Constraint
 
-::: jaxcip.BatchedConstraint
+::: jaxcip.rows
 
 ::: jaxcip.ParametricFunction
 

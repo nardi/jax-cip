@@ -86,8 +86,8 @@ option or a different split of the function may need fewer.
 
 - Pass data that changes as `params` and compile once. `compile` followed by many
   `solve` calls skips tracing, analysis and the cache lookup.
-- Write rows of the same form as one [`BatchedConstraint`][jaxcip.BatchedConstraint].
-  They share programs and each row gets only its own variables.
+- Write rows of the same form with [`rows`][jaxcip.rows]. They share programs and each
+  row gets only its own variables.
 - Keep affine parts as plain sums. The analysis passes them to SCIP as linear
   coefficients, which SCIP propagates and separates exactly.
 - Keep `split_sums` on unless a sum has many tiny summands. Separate terms relax over

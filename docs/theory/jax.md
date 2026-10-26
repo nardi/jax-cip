@@ -86,8 +86,7 @@ buffers are 64-byte aligned host memory that the plugin reads directly, and the 
 reads outputs from the plugin's buffers when it allows that, so a call copies nothing.
 
 All expressions of one term share its executables and differ only in their parameter
-vectors and children. A [`BatchedConstraint`][jaxcip.BatchedConstraint] of a thousand
-rows therefore compiles once. JAX-CIP caches terms in the process, keyed by their jaxpr,
+vectors and children. A thousand [`rows`][jaxcip.rows] of one form therefore compile once. JAX-CIP caches terms in the process, keyed by their jaxpr,
 signature and options. The disk cache stores the StableHLO and the executables, so a
 later process will skip lowering and compiling.
 

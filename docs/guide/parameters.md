@@ -1,4 +1,4 @@
-# Parameters and batched constraints
+# Parameters and rows
 
 ## Parameters
 
@@ -60,34 +60,32 @@ types. Calling [`solve`][jaxcip.solve] with a `Problem` will compile it first. A
 first time that is cheap, because the process and the disk cache keep the compiled
 terms. `solution.build` counts what the solve had to build.
 
-## Batched constraints
+## Rows of one form
 
-A model often has many rows of the same form over different variables. A
-[`BatchedConstraint`][jaxcip.BatchedConstraint] states them with one function of a row.
-`inputs` holds the indices of each row's variables in the flat vector of all variables,
-the leaves of the variables pytree concatenated in the order of `jax.tree.leaves`.
-`params` holds one entry per row along the leading axis:
+A model often has many rows of the same form over different variables. [`rows`][jaxcip.rows]
+states them with one function of a row. Its `inputs` hold, for each row, the positions in a
+vector of the entries that the row reads, and its `params` hold one entry per row along the
+leading axis. The result is a function of the vector that returns one value per row:
 
 <!-- name: test_parameters -->
 ```python
 rng = np.random.default_rng(0)
-rows = 100
-inputs = rng.integers(0, 20, size=(rows, 2))
-weights = rng.uniform(0.5, 2.0, size=(rows, 2))
+count = 100
+inputs = rng.integers(0, 20, size=(count, 2))
+weights = rng.uniform(0.5, 2.0, size=(count, 2))
 
 
 def row(x, weight):
     return weight[0] * x[0] ** 2 + jnp.exp(weight[1] * x[1])
 
 
-batched = jcp.Problem(
+evaluate = jcp.rows(row, inputs, weights)
+many = jcp.Problem(
     variables=jcp.Variable(lower=0.0, upper=3.0, shape=(20,)),
     objective=lambda x, params: -jnp.sum(x),
-    constraints=(
-        jcp.BatchedConstraint(row, inputs=inputs, params=weights, upper=10.0),
-    ),
+    constraints=(jcp.Constraint(lambda x, params: evaluate(x), upper=10.0),),
 )
-solution = jcp.solve(batched, options=jcp.SolveOptions(time_limit=60.0))
+solution = jcp.solve(many, options=jcp.SolveOptions(time_limit=60.0))
 ```
 
 <!-- name: test_parameters -->
@@ -95,12 +93,38 @@ solution = jcp.solve(batched, options=jcp.SolveOptions(time_limit=60.0))
 assert solution.status is jcp.Status.OPTIMAL
 ```
 
-All 100 rows share the programs compiled for `row`, so compiling costs the same as for
-one row. With the default `split_sums`, `row` itself becomes two terms, one for each
-summand. The same model written as a `Constraint` with a vector output would also work,
-but every row would then depend on every variable that some row reads, because the
-analysis tracks dependencies per leaf and per static slice. Prefer a `BatchedConstraint`
-for rows over gathered variables.
+All 100 rows share the programs compiled for `row`, so compiling costs the same as for one
+row. `row` itself is split like any function: it becomes two terms, one for each summand,
+and an affine part of a row would become linear coefficients. A summand reads only the
+entries it uses. Each row gives SCIP only its own variables, as long as the vector is made of variables
+alone. A reshape, a slice, a transpose or a concatenation of variables is fine, and so is
+`jnp.stack` of scalar variables. A vector that is computed from the variables, such as
+`jnp.exp(x)`, still works but makes every row depend on all the variables that some row
+reads. The same holds when the rows are only part of the output, as in
+`jnp.sum(evaluate(x))`. Write the rows as the whole value of a constraint, or add them to
+other terms with `+` and `-`.
 
-A batched constraint fixes its parameters when you build it. Parameters that change
-between solves go in the `params` of `solve`, which the batched function does not see.
+The `params` of `rows` may be built from the `params` of the problem, so rows can change
+between solves. Their values enter the programs as inputs, and the compiled terms stay the
+same:
+
+<!-- name: test_parameters -->
+```python
+def scaled(x, params):
+    return jcp.rows(row, inputs, params["scale"] * weights)(x)
+
+
+tunable = jcp.Problem(
+    variables=jcp.Variable(lower=0.0, upper=3.0, shape=(20,)),
+    objective=lambda x, params: -jnp.sum(x),
+    constraints=(jcp.Constraint(scaled, upper=10.0),),
+)
+compiled_rows = jcp.compile(tunable, {"scale": jnp.array(1.0)})
+tighter = jcp.solve(compiled_rows, {"scale": jnp.array(1.5)})
+```
+
+<!-- name: test_parameters -->
+```python
+assert tighter.status is jcp.Status.OPTIMAL
+assert tighter.build.compiled == 0
+```

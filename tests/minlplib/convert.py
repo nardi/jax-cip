@@ -1,7 +1,7 @@
 """Conversion of MINLPLib instances into JAX-CIP problems.
 
 Every row becomes a function of the variables it reads. Rows whose functions have the same
-expression tree, up to their numbers, form one `BatchedConstraint`, so they share compiled
+expression tree, up to their numbers, form one `Constraint` over `rows`, so they share compiled
 programs and differ only in their inputs and parameters. Numbers become parameters, except
 exponents, which stay in the code because the relaxation of `x ** a` depends on `a`.
 
@@ -388,6 +388,20 @@ def finite(bound: float) -> float:
     return math.copysign(math.inf, bound) if abs(bound) >= INFINITY else bound
 
 
+def group_constraint(shape: Shape, group: Group) -> jcp.Constraint:
+    """Returns the constraint of the rows of one shape, as `rows` of the variable vector."""
+    evaluate = jcp.rows(
+        row_function(shape),
+        np.array(group.inputs),
+        jnp.array(group.params) if group.params[0] else None,
+    )
+    return jcp.Constraint(
+        lambda x, _: evaluate(jnp.stack(x)),
+        lower=np.array(group.lower),
+        upper=np.array(group.upper),
+    )
+
+
 def convert(instance: Instance) -> jcp.Problem:
     """Returns the problem of an instance over one variable per entry, in OSiL order.
 
@@ -412,14 +426,7 @@ def convert(instance: Instance) -> jcp.Problem:
         group.lower.append(lower)
         group.upper.append(upper)
     constraints = tuple(
-        jcp.BatchedConstraint(
-            function=row_function(shape),
-            inputs=np.array(group.inputs),
-            params=jnp.array(group.params) if group.params[0] else None,
-            lower=np.array(group.lower),
-            upper=np.array(group.upper),
-        )
-        for shape, group in groups.items()
+        group_constraint(shape, group) for shape, group in groups.items()
     )
     shape, inputs, params = row_shape(instance.objective)
     objective_function = row_function(shape)

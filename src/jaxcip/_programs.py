@@ -113,7 +113,7 @@ def term_signature(term: Term, shape: tuple[int, ...]) -> TermSignature:
         TermInput(
             shape=shape_of(var),
             dtype=dtype_of(var),
-            is_variable=ref.origin is Origin.VARIABLE,
+            is_variable=ref.origin in (Origin.VARIABLE, Origin.GATHER),
         )
         for ref, var in zip(term.inputs, term.jaxpr.invars, strict=True)
     )

@@ -180,10 +180,12 @@ def parametric_problem() -> jcp.Problem:
         objective=objective,
         constraints=(
             jcp.Constraint(lambda v, p: jnp.sum(v.x**2), lower=0.04, upper=4.0),
-            jcp.BatchedConstraint(
-                lambda x, p: jnp.exp(x[0]) - p * x[1],
-                inputs=np.array([[0, 1], [1, 0]]),
-                params=jnp.array([1.0, 2.0]),
+            jcp.Constraint(
+                lambda v, p: jcp.rows(
+                    lambda x, q: jnp.exp(x[0]) - q * x[1],
+                    np.array([[0, 1], [1, 0]]),
+                    jnp.array([1.0, 2.0]),
+                )(jnp.concatenate([v.x, v.count[None]])),
                 upper=10.0,
             ),
         ),
@@ -397,16 +399,6 @@ def test_errors() -> None:
         jcp.compile(jcp.Problem(variables=jcp.Variable(lower=1.0, upper=0.0)))
     with pytest.raises(ValueError, match="must return a scalar"):
         jcp.compile(jcp.Problem(variables=box, objective=lambda x, p: x**2))
-    batched = jcp.BatchedConstraint(lambda x, p: x[0] * x[1], inputs=np.array([[0, 1]]))
-    for constraint, error, message in (
-        (batched._replace(inputs=np.array([0, 1])), ValueError, "two axes"),
-        (batched._replace(inputs=np.array([[0, 2]])), IndexError, "missing variables"),
-        (batched._replace(params=jnp.ones(2)), ValueError, "needs 1 rows"),
-        (batched._replace(params=jnp.ones(())), ValueError, "needs 1 rows"),
-        (batched._replace(function=lambda x, p: x**2), ValueError, "return a scalar"),
-    ):
-        with pytest.raises(error, match=message):
-            jcp.compile(jcp.Problem(variables=box, constraints=(constraint,)))
     compiled = jcp.compile(
         jcp.Problem(variables=box, objective=lambda x, p: jnp.exp(x[0] * p[0])),
         jnp.ones(1),
@@ -507,8 +499,7 @@ WEIGHTS = np.array([1.0, 2.0, 3.0])
 def test_uncached_terms() -> None:
     """Checks fresh terms built without the disk cache.
 
-    The batched constraint has no affine part and the other constraint closes over an
-    array constant.
+    The rows have no affine part and the other constraint closes over an array constant.
     """
     jcp.clear_caches()
     problem = jcp.Problem(
@@ -516,8 +507,11 @@ def test_uncached_terms() -> None:
         objective=lambda x, p: jnp.sum(x),
         constraints=(
             jcp.Constraint(lambda x, p: jnp.sum(WEIGHTS * jnp.log(x)), lower=0.0),
-            jcp.BatchedConstraint(
-                lambda x, p: x[0] * x[1], inputs=np.array([[0, 1], [1, 2]]), lower=1.0
+            jcp.Constraint(
+                lambda x, p: jcp.rows(
+                    lambda y, q: y[0] * y[1], np.array([[0, 1], [1, 2]])
+                )(x),
+                lower=1.0,
             ),
         ),
     )

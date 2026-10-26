@@ -4,7 +4,7 @@ import math
 from collections.abc import Callable
 from typing import Any, NamedTuple, Protocol
 
-from jaxtyping import Array, ArrayLike, Float, Int, PyTree
+from jaxtyping import Array, ArrayLike, Float, PyTree
 
 from jaxcip._types import Domain, Sense
 
@@ -20,10 +20,10 @@ class ParametricFunction(Protocol):
 
 
 class RowFunction(Protocol):
-    """A JAX function `f(x, params)` of one row of a `BatchedConstraint`.
+    """A JAX function `f(x, params)` of one row of `rows`.
 
-    `x` is the vector of the row's variables and `params` is the row's slice of
-    `BatchedConstraint.params`.
+    `x` is the vector of the row's entries and `params` is the row's slice of the
+    parameters of `rows`.
     """
 
     def __call__(self, x: Float[Array, " k"], params: Any, /) -> Float[Array, ""]: ...
@@ -53,22 +53,6 @@ class Constraint(NamedTuple):
     upper: ArrayLike = math.inf
 
 
-class BatchedConstraint(NamedTuple):
-    """Rows `lower[r] ≤ function(x_flat[inputs[r]], params[r]) ≤ upper[r]` of one structure.
-
-    `x_flat` is the vector of all variables in the order of `jax.tree.leaves`. Every row
-    shares the compiled programs of `function` and has its own inputs and parameters, so
-    many similar rows compile as fast as one.
-    """
-
-    function: RowFunction
-    inputs: Int[ArrayLike, "rows k"]
-    params: PyTree[ArrayLike] = None
-    """A pytree of arrays whose leading axis has one entry per row, or `None`."""
-    lower: Float[ArrayLike, "*rows"] = -math.inf
-    upper: Float[ArrayLike, "*rows"] = math.inf
-
-
 class Problem(NamedTuple):
     """An optimization problem over a pytree of variables.
 
@@ -80,7 +64,7 @@ class Problem(NamedTuple):
     objective: ParametricFunction | None = None
     """A function with a scalar output."""
     sense: Sense = Sense.MINIMIZE
-    constraints: tuple[Constraint | BatchedConstraint, ...] = ()
+    constraints: tuple[Constraint, ...] = ()
 
 
 def is_variable(value: object) -> bool:
