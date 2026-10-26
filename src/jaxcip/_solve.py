@@ -145,11 +145,10 @@ def build_scip(compiled: CompiledProblem, params: PyTree[Any]) -> Scip:
     offset = 0.0
     objective_block = compiled.objective
     if objective_block is not None:
-        constant, indices, coefficients = linear_rows(
-            objective_block, variables, param_leaves
-        )
-        np.add.at(objective, indices[0], coefficients[0])
-        offset = float(constant[0])
+        linear = linear_rows(objective_block, variables, param_leaves)
+        indices, coefficients = linear.row(0)
+        np.add.at(objective, indices, coefficients)
+        offset = float(linear.constants[0])
     for lower, upper, coefficient, domain in zip(
         variables.lower, variables.upper, objective, flat_domains(compiled), strict=True
     ):
@@ -209,15 +208,14 @@ def add_block(
 ) -> None:
     """Adds the rows of a constraint block."""
     variables = compiled.variables
-    constant, indices, coefficients = linear_rows(block, variables, param_leaves)
+    linear = linear_rows(block, variables, param_leaves)
+    constant = linear.constants
     terms = row_terms(block, variables, param_leaves)
     for row in range(block.rows):
         lower, upper = block.lower[row], block.upper[row]
         if lower == -math.inf and upper == math.inf:
             continue
-        is_used = coefficients[row] != 0.0
-        row_indices = np.ascontiguousarray(indices[row][is_used], np.intc)
-        row_coefficients = np.ascontiguousarray(coefficients[row][is_used], np.float64)
+        row_indices, row_coefficients = linear.row(row)
         if terms[row]:
             scip.add_jax_constraint(
                 terms[row],

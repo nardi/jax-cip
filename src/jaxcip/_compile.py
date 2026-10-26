@@ -8,12 +8,14 @@ values, so one compiled problem solves for many of them.
 import math
 import os
 import time
+import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from types import TracebackType
 from typing import Any, NamedTuple, Self
 
+import asdex
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -282,13 +284,50 @@ class Block(NamedTuple):
     upper: Float[np.ndarray, " rows"]
     batch: BatchedConstraint | None
     """The batched constraint of the block, with `inputs` and `params` as arrays."""
-    affine: Callable[..., tuple[Array, list[Array]]] | None
-    """Maps parameter leaves to the constants and the Jacobians of the affine part."""
+    affine: "AffineFunction | None"
+    """Maps parameter leaves to the constants and the Jacobian entries of the affine part."""
 
     @property
     def rows(self) -> int:
         """Number of rows."""
         return self.lower.shape[0]
+
+
+class AffineValues(NamedTuple):
+    """The constants and the Jacobian entries of the affine part of a block."""
+
+    constants: Float[np.ndarray, " rows"]
+    rows: Int[np.ndarray, " nnz"]
+    """Row of each entry."""
+    columns: Int[np.ndarray, " nnz"]
+    """Column of each entry among the inputs of its row.
+
+    In a block of one function, this is a variable index. In a batched block, it is a
+    position in the inputs of the row.
+    """
+    values: Float[np.ndarray, " nnz"]
+    """Coefficient of each entry, which may be zero."""
+
+
+AffineFunction = Callable[[Sequence[np.ndarray]], AffineValues]
+"""Maps parameter leaves, with a leading row axis in a batched block, to `AffineValues`."""
+
+
+class LinearRows(NamedTuple):
+    """The affine part of a block as constants and a sparse matrix with one row per row."""
+
+    constants: Float[np.ndarray, " rows"]
+    pointers: Int[np.ndarray, " rows_plus_one"]
+    """Start of each row in `indices` and `coefficients`, then their total number."""
+    indices: Int[np.ndarray, " nnz"]
+    """Variable index of each entry, as `np.intc`, in the order of the rows."""
+    coefficients: Float[np.ndarray, " nnz"]
+    """Coefficient of each entry. No entry is zero."""
+
+    def row(self, row: int) -> tuple[Int[np.ndarray, " k"], Float[np.ndarray, " k"]]:
+        """Returns the variable indices and coefficients of one row."""
+        span = slice(self.pointers[row], self.pointers[row + 1])
+        return self.indices[span], self.coefficients[span]
 
 
 class CompiledProblem(NamedTuple):
@@ -461,7 +500,7 @@ def function_block(
     terms = request_terms(analysis, builder)
     affine = None
     if analysis.affine is not None:
-        affine = jax.jit(affine_function(analysis, variable_avals, batched=False))
+        affine = sparse_affine_function(analysis, variables, params)
     return RequestedBlock(
         Block(
             analysis=analysis,
@@ -510,7 +549,7 @@ def batched_block(
     terms = request_terms(analysis, builder)
     affine = None
     if analysis.affine is not None:
-        affine = jax.jit(affine_function(analysis, variable_avals, batched=True))
+        affine = batched_affine_function(analysis, variable_avals[0])
     return RequestedBlock(
         Block(
             analysis=analysis,
@@ -562,38 +601,84 @@ def request_terms(
     )
 
 
-def affine_function(
-    analysis: Analysis, variable_avals: Sequence[jax.ShapeDtypeStruct], batched: bool
-) -> Callable[..., tuple[Array, list[Array]]]:
-    """Returns a function from parameter leaves to the constants and Jacobians of the affine part.
+def sparse_affine_function(
+    analysis: Analysis, variables: VariableLayout, params: ParamsLayout
+) -> AffineFunction:
+    """Returns a function from parameter leaves to the constants and Jacobian of the affine part.
 
-    The affine part is exact at any point, so it is linearized at zero. The constants have
-    one entry per row and each Jacobian has one row per row and one column per entry of a
-    variable leaf. With `batched`, the parameter leaves have a leading row axis.
+    The affine part is exact at any point, so it is linearized at zero. ASDEX finds which
+    entries of the Jacobian can be nonzero and colors its columns once, so a solve only
+    evaluates one derivative per color. The values of the entries depend on the parameters.
     """
     affine = analysis.affine
     assert affine is not None
-    zeros = [jnp.zeros(aval.shape, aval.dtype) for aval in variable_avals]
+    zeros = jnp.zeros(variables.size)
+    sample = [jnp.zeros(aval.shape, aval.dtype) for aval in params.avals]
 
-    def one(params: Sequence[Array]) -> tuple[Array, list[Array]]:
+    def value(x: Array, leaves: Sequence[Array]) -> Array:
+        parts = [
+            x[offset : offset + math.prod(shape)].reshape(shape)
+            for offset, shape in zip(variables.offsets, variables.shapes, strict=True)
+        ]
+        return evaluate_term(
+            affine, analysis.shape, analysis.constants, parts, leaves
+        ).ravel()
+
+    with warnings.catch_warnings():
+        # A dense affine part, such as a matrix product, is correct and costs what the
+        # dense derivative would, so the warning about the missing speedup is no use here.
+        warnings.simplefilter("ignore", asdex.DenseColoringWarning)
+        coloring = asdex.jacobian_coloring(value, zeros, sample, argnums=0)
+    jacobian = jax.jit(asdex.jacobian_from_coloring(value, coloring))
+    constant = jax.jit(lambda leaves: value(zeros, leaves))
+
+    def evaluate(leaves: Sequence[np.ndarray]) -> AffineValues:
+        arguments = [jnp.asarray(leaf) for leaf in leaves]
+        entries = jacobian(zeros, arguments)
+        indices = np.asarray(entries.indices)
+        return AffineValues(
+            constants=np.asarray(constant(arguments), np.float64),
+            rows=indices[:, 0],
+            columns=indices[:, 1],
+            values=np.asarray(entries.data, np.float64),
+        )
+
+    return evaluate
+
+
+def batched_affine_function(
+    analysis: Analysis, variable_aval: jax.ShapeDtypeStruct
+) -> AffineFunction:
+    """Returns a function from per-row parameters to the constants and Jacobian of the affine part.
+
+    Every row of a batched block reads only its own few inputs, so its Jacobian is stored
+    densely. The parameter leaves have a leading row axis.
+    """
+    affine = analysis.affine
+    assert affine is not None
+    zeros = [jnp.zeros(variable_aval.shape, variable_aval.dtype)]
+
+    def one(params: Sequence[Array]) -> tuple[Array, Array]:
         def value(leaves: list[Array]) -> Array:
             return evaluate_term(
                 affine, analysis.shape, analysis.constants, leaves, params
             ).ravel()
 
-        constant = value(zeros)
-        jacobians = jax.jacfwd(value)(zeros)
-        rows = constant.shape[0]
-        return constant, [jacobian.reshape(rows, -1) for jacobian in jacobians]
+        return value(zeros), jax.jacfwd(value)(zeros)[0].reshape(1, -1)
 
-    if not batched:
-        return lambda *params: one(params)
+    batch = jax.jit(jax.vmap(lambda *row: one(row)))
 
-    def batch(*params: Array) -> tuple[Array, list[Array]]:
-        constant, jacobians = jax.vmap(lambda *row: one(row))(*params)
-        return constant[:, 0], [jacobian[:, 0, :] for jacobian in jacobians]
+    def evaluate(leaves: Sequence[np.ndarray]) -> AffineValues:
+        constants, jacobians = batch(*[jnp.asarray(leaf) for leaf in leaves])
+        rows, width = jacobians.shape[0], jacobians.shape[-1]
+        return AffineValues(
+            constants=np.asarray(constants[:, 0], np.float64),
+            rows=np.repeat(np.arange(rows), width),
+            columns=np.tile(np.arange(width), rows),
+            values=np.asarray(jacobians[:, 0, :], np.float64).ravel(),
+        )
 
-    return batch
+    return evaluate
 
 
 def term_rows(
@@ -646,27 +731,28 @@ def term_rows(
 
 def linear_rows(
     block: Block, variables: VariableLayout, param_leaves: Sequence[np.ndarray]
-) -> tuple[
-    Float[np.ndarray, " rows"], Int[np.ndarray, "rows k"], Float[np.ndarray, "rows k"]
-]:
-    """Returns the constants, variable indices and coefficients of the affine part of a block."""
+) -> LinearRows:
+    """Returns the constants and the nonzero coefficients of the affine part of a block."""
     rows = block.rows
     if block.affine is None:
-        return np.zeros(rows), np.zeros((rows, 0), np.intc), np.zeros((rows, 0))
+        return LinearRows(
+            np.zeros(rows),
+            np.zeros(rows + 1, np.intp),
+            np.zeros(0, np.intc),
+            np.zeros(0),
+        )
     leaves = param_leaves if block.batch is None else block.batch.params
-    constant, jacobians = block.affine(*leaves)
-    index_parts: list[np.ndarray] = []
-    coefficient_parts: list[np.ndarray] = []
-    for leaf, jacobian in enumerate(jacobians):
-        if block.batch is None:
-            leaf_indices = variables.indices(leaf)
-            indices = np.broadcast_to(leaf_indices, (rows, leaf_indices.size))
-        else:
-            indices = np.asarray(block.batch.inputs)
-        index_parts.append(indices)
-        coefficient_parts.append(np.asarray(jacobian, np.float64))
-    return (
-        np.asarray(constant, np.float64),
-        np.concatenate(index_parts, axis=1).astype(np.intc),
-        np.concatenate(coefficient_parts, axis=1),
+    entries = block.affine(leaves)
+    used = entries.values != 0.0
+    entry_rows, columns = entries.rows[used], entries.columns[used]
+    if block.batch is not None:
+        columns = np.asarray(block.batch.inputs)[entry_rows, columns]
+    order = np.argsort(entry_rows, kind="stable")
+    pointers = np.zeros(rows + 1, np.intp)
+    np.cumsum(np.bincount(entry_rows, minlength=rows), out=pointers[1:])
+    return LinearRows(
+        constants=entries.constants,
+        pointers=pointers,
+        indices=columns[order].astype(np.intc),
+        coefficients=entries.values[used][order],
     )
