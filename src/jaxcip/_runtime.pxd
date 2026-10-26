@@ -14,7 +14,7 @@ from jaxcip._pjrt cimport (
 
 cdef enum:
     ALIGNMENT = 64
-    MAX_INPUTS = 4
+    MAX_INPUTS = 5
     MAX_OUTPUTS = 3
 
 

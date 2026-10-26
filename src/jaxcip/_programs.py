@@ -98,6 +98,8 @@ class TermSignature(NamedTuple):
     """Length of the flat parameter vector, at least one."""
     state_size: int = 0
     """Length of the warm start of the term's roots, or 0 if it has none."""
+    enclosure_size: int = 0
+    """Length of the enclosures of the term's roots, or 0 if they are not reused."""
 
     @property
     def num_entries(self) -> int:
@@ -118,8 +120,20 @@ def term_signature(term: Term, shape: tuple[int, ...]) -> TermSignature:
     num_inputs = sum(item.size for item in inputs if item.is_variable)
     num_params = sum(item.size for item in inputs if not item.is_variable)
     num_params += int(math.prod(shape) > 1)
-    return TermSignature(
+    signature = TermSignature(
         inputs, shape, num_inputs, max(num_params, 1), state_size(term.jaxpr)
+    )
+    if signature.state_size:
+        signature = signature._replace(enclosure_size=enclosure_size(term, signature))
+    return signature
+
+
+def enclosure_size(term: Term, signature: TermSignature) -> int:
+    """Returns the length of the enclosures that the relaxation of a term's roots passes on."""
+    vector = jax.ShapeDtypeStruct((signature.num_inputs,), jnp.float64)
+    params = jax.ShapeDtypeStruct((signature.num_params,), jnp.float64)
+    return jmk.root_enclosure_size(
+        term_function(term, signature), vector, vector, vector, params
     )
 
 
@@ -183,14 +197,51 @@ def program_functions(
     function: TermFunction,
     options: RelaxationOptions,
     stateful: StatefulFunction | None = None,
+    enclosures: bool = False,
 ) -> tuple[Callable[..., Any], ...]:
     """Returns the six programs of a scalar function in the order of `Program`.
 
     With a `stateful` version of the function, the gradient and Hessian-vector programs take
     the warm start of its roots as their last input, and the gradient program also returns
-    the roots it found.
+    the roots it found. With `enclosures`, the convex, concave and interval programs take
+    the enclosures of the roots as their last input and return the ones they verified as
+    their last output.
     """
     mode = options.mode.value
+
+    def side(kind: Callable[..., Callable[..., Any]]) -> Callable[..., Any]:
+        """Returns the convex or concave program for the options."""
+        program = kind(
+            function,
+            mode,
+            alpha_bb=options.alpha_bb,
+            tighten_bounds=options.tighten_bounds,
+            enclosures=enclosures,
+        )
+        if not enclosures:
+            return program
+
+        def with_enclosure_last(
+            x: Array, lower: Array, upper: Array, params: Array, enclosure: Array
+        ) -> Any:
+            return program(x, lower, upper, enclosure, params)
+
+        return with_enclosure_last
+
+    def interval_program(target: Callable[..., Any]) -> Callable[..., Any]:
+        """Returns the interval program of a function for the options."""
+        program = jmk.interval(
+            target, tighten_bounds=options.tighten_bounds, enclosures=enclosures
+        )
+        if not enclosures:
+            return program
+
+        def with_enclosure_last(
+            lower: Array, upper: Array, params: Array, enclosure: Array
+        ) -> Any:
+            return program(lower, upper, enclosure, params)
+
+        return with_enclosure_last
 
     def hessian_vector(
         x: Float[Array, " n"], direction: Float[Array, " n"], params: Float[Array, " m"]
@@ -222,38 +273,39 @@ def program_functions(
         if stateful is None
         else stateful_value_and_gradient,
         hessian_vector if stateful is None else stateful_hessian_vector,
-        jmk.convex_side(
-            function,
-            mode,
-            alpha_bb=options.alpha_bb,
-            tighten_bounds=options.tighten_bounds,
-        ),
-        jmk.concave_side(
-            function,
-            mode,
-            alpha_bb=options.alpha_bb,
-            tighten_bounds=options.tighten_bounds,
-        ),
-        jmk.interval(function, tighten_bounds=options.tighten_bounds),
+        side(jmk.convex_side),
+        side(jmk.concave_side),
+        interval_program(function),
         jmk.interval(jax.grad(function), tighten_bounds=options.tighten_bounds),
     )
 
 
 def program_shapes(
-    program: Program, num_inputs: int, num_params: int, state_size: int = 0
+    program: Program,
+    num_inputs: int,
+    num_params: int,
+    state_size: int = 0,
+    enclosure_size: int = 0,
 ) -> tuple[jax.ShapeDtypeStruct, ...]:
     """Returns the shapes of the arguments of a program."""
     vector = jax.ShapeDtypeStruct((num_inputs,), jnp.float64)
     params = jax.ShapeDtypeStruct((num_params,), jnp.float64)
     state = (jax.ShapeDtypeStruct((state_size,), jnp.float64),) if state_size else ()
+    enclosure = (
+        (jax.ShapeDtypeStruct((enclosure_size,), jnp.float64),)
+        if enclosure_size
+        else ()
+    )
     match program:
         case Program.VALUE_AND_GRADIENT:
             return (vector, params, *state)
         case Program.HESSIAN_VECTOR:
             return (vector, vector, params, *state)
         case Program.CONVEX | Program.CONCAVE:
-            return (vector, vector, vector, params)
-        case Program.INTERVAL | Program.GRADIENT_INTERVAL:
+            return (vector, vector, vector, params, *enclosure)
+        case Program.INTERVAL:
+            return (vector, vector, params, *enclosure)
+        case Program.GRADIENT_INTERVAL:
             return (vector, vector, params)
         case _:
             raise AssertionError(f"Unknown program {program}.")
@@ -301,13 +353,20 @@ def lower_programs(
     """
     function = term_function(term, signature)
     stateful = stateful_term_function(term, signature) if signature.state_size else None
+    enclosures = signature.enclosure_size > 0
     lowered: list[LoweredProgram | None] = []
     skipped: list[str] = []
     for program, program_function in zip(
-        Program, program_functions(function, options.relaxation, stateful), strict=True
+        Program,
+        program_functions(function, options.relaxation, stateful, enclosures),
+        strict=True,
     ):
         shapes = program_shapes(
-            program, signature.num_inputs, signature.num_params, signature.state_size
+            program,
+            signature.num_inputs,
+            signature.num_params,
+            signature.state_size,
+            signature.enclosure_size,
         )
         reason = is_wanted(program, options, term.jaxpr)
         if reason is None:

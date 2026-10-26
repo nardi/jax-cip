@@ -251,3 +251,127 @@ def test_programs_without_roots_are_unchanged() -> None:
         term_function(plain, signature), jcp.RelaxationOptions()
     )
     assert len(functions) == len(Program)
+
+
+CENTRE = np.array([0.1, -0.05])
+"""Centre of the nested boxes of the enclosure tests."""
+
+
+def boxes(
+    half_widths: list[float], centre: np.ndarray = CENTRE
+) -> tuple[np.ndarray, np.ndarray]:
+    """Returns the lower and upper bounds of boxes around a centre, one per half-width."""
+    widths = np.array(half_widths)[:, None]
+    return np.ascontiguousarray(centre - widths), np.ascontiguousarray(centre + widths)
+
+
+def test_enclosures_pass_from_larger_boxes_to_smaller_ones() -> None:
+    """Checks which stored box a run starts from: the smallest one around its box."""
+    _, term, params = compiled_root_term()
+    handle = term.handle
+    assert handle.enclosure_size == 2 * SIZE
+    lower, upper = boxes([0.15, 0.1, 0.05, 0.12])
+    runs = handle.relaxation_runs(CENTRE, lower, upper, params)
+    parent, child, grandchild, other = runs
+    assert np.all(np.isnan(parent[1])) and np.all(np.isfinite(parent[2]))
+    np.testing.assert_array_equal(child[1], parent[2])
+    np.testing.assert_array_equal(grandchild[1], child[2])
+    # The box of half-width 0.12 fits in the parent but not in the child.
+    np.testing.assert_array_equal(other[1], parent[2])
+    # A box that no stored box contains starts from nothing.
+    far_lower, far_upper = boxes([0.1], np.array([0.5, 0.5]))
+    [(_, started, found)] = handle.relaxation_runs(CENTRE, far_lower, far_upper, params)
+    assert np.all(np.isnan(started)) and np.all(np.isfinite(found))
+
+
+def test_relaxations_from_stored_enclosures_stay_valid() -> None:
+    """Checks that the relaxations of nested boxes bound the function at the reference."""
+    _, term, params = compiled_root_term()
+    function = term_function(term.term, term.signature)
+    rng = np.random.default_rng(1)
+    lower, upper = boxes([0.15, 0.1, 0.07, 0.04])
+    for _ in range(5):
+        x = CENTRE + rng.uniform(-0.04, 0.04, size=SIZE)
+        truth = float(function(jnp.asarray(x), jnp.asarray(params)))
+        under = term.handle.relaxation_runs(x, lower, upper, params)
+        over = term.handle.relaxation_runs(x, lower, upper, params, True)
+        for (low, _, _), (high, _, _) in zip(under, over, strict=True):
+            assert low <= truth + 1e-9 <= high + 2e-9
+
+
+def test_unverified_boxes_store_nothing() -> None:
+    """Checks that a box too wide to verify leaves no enclosure behind."""
+    _, term, params = compiled_root_term()
+    lower, upper = boxes([1.0, 0.1])
+    wide, narrow = term.handle.relaxation_runs(CENTRE, lower, upper, params)
+    assert np.all(np.isnan(wide[2]))
+    assert np.all(np.isnan(narrow[1])) and np.all(np.isfinite(narrow[2]))
+
+
+def test_the_store_keeps_the_newest_boxes() -> None:
+    """Checks that a repeated box keeps its entry and that old entries make room."""
+    _, term, params = compiled_root_term()
+    handle = term.handle
+    parent_lower, parent_upper = boxes([0.15])
+    others = [np.array([0.6 + 0.3 * index, 0.5]) for index in range(8)]
+    # A box that is run again replaces its entry, so many runs never push the parent out.
+    repeated_lower, repeated_upper = boxes([0.05] * 6, np.array([-0.5, 0.5]))
+    lower = np.concatenate([parent_lower, repeated_lower])
+    upper = np.concatenate([parent_upper, repeated_upper])
+    child_lower, child_upper = boxes([0.1])
+    runs = handle.relaxation_runs(
+        CENTRE,
+        np.concatenate([lower, child_lower]),
+        np.concatenate([upper, child_upper]),
+        params,
+    )
+    assert np.all(np.isfinite(runs[-1][1]))
+    # Eight other boxes push the parent out of the store.
+    far_lower = np.concatenate(
+        [parent_lower] + [boxes([0.05], c)[0] for c in others] + [child_lower]
+    )
+    far_upper = np.concatenate(
+        [parent_upper] + [boxes([0.05], c)[1] for c in others] + [child_upper]
+    )
+    runs = handle.relaxation_runs(CENTRE, far_lower, far_upper, params)
+    assert np.all(np.isnan(runs[-1][1]))
+
+
+def test_relaxation_runs_checks_its_arguments() -> None:
+    """Checks the errors for boxes of different shapes and the result for no boxes."""
+    _, term, params = compiled_root_term()
+    lower, upper = boxes([0.1, 0.2])
+    with pytest.raises(ValueError, match="same shape"):
+        term.handle.relaxation_runs(CENTRE, lower, upper[:1], params)
+    with pytest.raises(ValueError, match="lower"):
+        term.handle.relaxation_runs(CENTRE, np.zeros((1, 5)), np.zeros((1, 5)), params)
+    assert term.handle.relaxation_runs(CENTRE, lower[:0], upper[:0], params) == []
+
+
+def test_tightened_bounds_leave_the_enclosures_out() -> None:
+    """Checks that tightening intermediate bounds, which cannot reuse enclosures, switches them off."""
+    problem = jcp.Problem(
+        variables=jcp.Variable(lower=-2.0, upper=2.0, shape=(SIZE,)),
+        objective=objective,
+    )
+    options = jcp.CompileOptions(
+        disk_cache=False, relaxation=jcp.RelaxationOptions(tighten_bounds=True)
+    )
+    compiled = jcp.compile(problem, options=options)
+    block = compiled.objective
+    assert block is not None
+    assert block.terms[0].handle.enclosure_size == 0
+    assert block.terms[0].handle.state_size == SIZE
+
+
+def test_handle_validation_with_enclosures() -> None:
+    """Checks the errors of enclosures that the programs do not match."""
+    _, term, _ = compiled_root_term()
+    programs = term.handle.programs
+    with pytest.raises(ValueError, match="negative"):
+        FunctionHandle(SIZE, 1, programs, SIZE, -1)
+    with pytest.raises(ValueError, match="convex program has 3 outputs"):
+        FunctionHandle(SIZE, term.handle.num_params, programs, SIZE, 0)
+    assert output_sizes(Program.CONVEX, SIZE, 0, 4) == (1, SIZE, 4)
+    assert output_sizes(Program.INTERVAL, SIZE, 0, 4) == (1, 1, 4)
+    assert len(program_slots(Program.INTERVAL, 0, 4)) == 4

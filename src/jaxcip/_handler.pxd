@@ -6,11 +6,13 @@ cdef enum:
     VALUE_CACHE_SIZE = 4
     BOUNDS_CACHE_SIZE = 4
     ESTIMATE_CACHE_SIZE = 2
+    BOX_STORE_SIZE = 8
     NUM_INIT_POINTS = 3
 
 
 # Inputs of the programs. Every expression of a function shares the host arrays of all slots
-# but the parameters and the warm start of roots, which each expression owns.
+# but the parameters, the warm start of roots and the enclosures of roots, which each
+# expression owns.
 cdef enum:
     SLOT_X = 0
     SLOT_DIRECTION = 1
@@ -18,7 +20,8 @@ cdef enum:
     SLOT_UPPER = 3
     SLOT_PARAMS = 4
     SLOT_STATE = 5
-    NUM_SLOTS = 6
+    SLOT_ENCLOSURE = 6
+    NUM_SLOTS = 7
 
 
 # The programs of a function, with the values of `jaxcip._types.Program`.
@@ -69,6 +72,7 @@ cdef struct Function:
     int n
     int m
     int state_size
+    int enclosure_size
     ProgramSpec programs[NUM_PROGRAMS]
     int slots[NUM_PROGRAMS][MAX_INPUTS]
     Input inputs[NUM_SLOTS]
@@ -83,6 +87,12 @@ cdef struct ExprData:
     Input params
     Input state
     double* state_next
+    Input enclosure
+    double* enclosure_next
+    double* box_keys
+    double* box_enclosures
+    int box_count
+    int box_next
     double* cache_block
     double* value_keys
     double* value_results
@@ -121,4 +131,5 @@ cdef class FunctionHandle:
     cdef readonly int num_inputs
     cdef readonly int num_params
     cdef readonly int state_size
+    cdef readonly int enclosure_size
     cdef readonly object programs

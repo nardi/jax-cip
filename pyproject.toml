@@ -47,7 +47,7 @@ config-settings = { setup-args = "-Dcoverage=true" }
 # This asdex commit fixes an empty sparsity pattern for functions that contain a
 # `jnp.where`. Released versions up to 0.5.2 have the bug.
 asdex = { git = "https://github.com/adrhill/asdex", rev = "da130b048b72c03e5ac1cb154968797bc32868b8" }
-jaxormick = { git = "https://github.com/nardi/jaxormick", rev = "8980dfb3ca616d2c35d96b4a2e1dfaa09bf3aea1" }
+jaxormick = { git = "https://github.com/nardi/jaxormick", rev = "5f7cf759dead45e09c92122a6d90b9b242048426" }
 
 [tool.pytest.ini_options]
 # The markdown docs and the README are collected by markdown-pytest, which runs code

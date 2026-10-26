@@ -114,6 +114,17 @@ takes them as an input. Entries that no run has set use the guess written in the
 a system of 12 unknowns, a run takes 68 µs when \(x\) repeats and 125 µs when \(x\) moves a
 little, against 200 µs from the written guess.
 
+The relaxation programs reuse the enclosures of roots in the same way. An enclosure that
+the Krawczyk operator verified on a box holds the unique root for every point of that box,
+so it also holds on every box inside it. Each expression stores the enclosures that its
+runs verified together with their boxes. A relaxation program starts from the enclosure of
+the smallest stored box that contains its own, and skips the solver and the search for an
+enclosure. The program returns the enclosure it verified, which the handler stores in turn.
+Branching shrinks boxes, so most boxes have a stored parent. The store holds the eight most
+recent boxes, and a sibling box never uses an enclosure of its sibling, since the check is
+that the stored box contains the current one. On a system of 6 unknowns, the convex and
+interval programs take 100 to 150 µs on a box with a stored parent, against 250 to 280 µs without.
+
 - A Newton step after the solver gives the same root to machine precision from every
   guess, so values that SCIP compares do not depend on the order of the callbacks. That
   step has no derivative, because `lax.custom_root` takes derivatives from the implicit

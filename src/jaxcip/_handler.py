@@ -106,29 +106,42 @@ PROGRAM_SLOTS: tuple[tuple[int, ...], ...] = (
 """Inputs of each program in the order of `Program`, as the exported functions take them."""
 
 
-def program_slots(program: Program, state_size: int = 0) -> tuple[int, ...]:
-    """Returns the input slots of a program, which end with the warm start if there is one."""
+def program_slots(
+    program: Program, state_size: int = 0, enclosure_size: int = 0
+) -> tuple[int, ...]:
+    """Returns the input slots of a program.
+
+    They end with the warm start of the roots for the gradient and Hessian-vector programs,
+    and with the enclosures of the roots for the relaxation programs, if there are any.
+    """
     match program:
         case Program.VALUE_AND_GRADIENT | Program.HESSIAN_VECTOR if state_size:
             return (*PROGRAM_SLOTS[program], SLOT_STATE)
+        case Program.CONVEX | Program.CONCAVE | Program.INTERVAL if enclosure_size:
+            return (*PROGRAM_SLOTS[program], SLOT_ENCLOSURE)
         case _:
             return PROGRAM_SLOTS[program]
 
 
 def output_sizes(
-    program: Program, num_inputs: int, state_size: int = 0
+    program: Program, num_inputs: int, state_size: int = 0, enclosure_size: int = 0
 ) -> tuple[int, ...]:
     """Returns the number of doubles in each output of a program.
 
-    With a warm start, the gradient program returns the roots as a third output.
+    With a warm start, the gradient program returns the roots as a third output. With
+    enclosures, the relaxation programs return the verified enclosures as a third output.
     """
     match program:
         case Program.VALUE_AND_GRADIENT if state_size:
             return (1, num_inputs, state_size)
+        case Program.CONVEX | Program.CONCAVE if enclosure_size:
+            return (1, num_inputs, enclosure_size)
         case Program.VALUE_AND_GRADIENT | Program.CONVEX | Program.CONCAVE:
             return (1, num_inputs)
         case Program.HESSIAN_VECTOR:
             return (num_inputs,)
+        case Program.INTERVAL if enclosure_size:
+            return (1, 1, enclosure_size)
         case Program.INTERVAL:
             return (1, 1)
         case Program.GRADIENT_INTERVAL:
@@ -148,6 +161,89 @@ def switches_from(options: object) -> Switches:
     switches.hessian = handler_options.hessian
     switches.zero_copy = handler_options.zero_copy
     return switches
+
+
+@cython.cfunc
+@cython.nogil
+@cython.exceptval(check=False)
+def choose_enclosure(data: cython.pointer[ExprData]) -> cython.void:
+    """Puts the enclosure of the smallest stored box around the current box into the input.
+
+    An enclosure of the roots that was verified over a box holds on every box inside it. If
+    no stored box contains the current one, the input is NaN, and the program searches for an
+    enclosure itself.
+    """
+    function: cython.pointer[Function] = data.function
+    n: cython.int = function.n
+    size: cython.int = function.enclosure_size
+    lower: cython.p_double = function.inputs[SLOT_LOWER].host
+    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    best: cython.int = -1
+    best_width: cython.double = 0.0
+    width: cython.double
+    key: cython.p_double
+    index: cython.int
+    entry: cython.int
+    contains: cython.bint
+    for index in range(data.box_count):
+        key = data.box_keys + 2 * n * index
+        contains = True
+        width = 0.0
+        for entry in range(n):
+            if lower[entry] < key[entry] or upper[entry] > key[n + entry]:
+                contains = False
+                break
+            width += key[n + entry] - key[entry]
+        if contains and (best < 0 or width < best_width):
+            best = index
+            best_width = width
+    if best >= 0:
+        memcpy(
+            data.enclosure.host,
+            data.box_enclosures + size * best,
+            size * cython.sizeof(cython.double),
+        )
+    else:
+        for index in range(size):
+            data.enclosure.host[index] = NAN
+
+
+@cython.cfunc
+@cython.nogil
+@cython.exceptval(check=False)
+def remember_enclosure(data: cython.pointer[ExprData]) -> cython.void:
+    """Stores the enclosure that a run verified together with the box it holds on.
+
+    A run that verified none leaves NaN, which is not stored. A box that is stored again
+    replaces its entry. Otherwise the oldest entry makes room.
+    """
+    function: cython.pointer[Function] = data.function
+    n: cython.int = function.n
+    size: cython.int = function.enclosure_size
+    index: cython.int
+    key: cython.p_double
+    if not all_finite(data.enclosure_next, size):
+        return
+    lower: cython.p_double = function.inputs[SLOT_LOWER].host
+    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    slot: cython.int = -1
+    for index in range(data.box_count):
+        key = data.box_keys + 2 * n * index
+        if same(lower, key, n) and same(upper, key + n, n):
+            slot = index
+            break
+    if slot < 0:
+        slot = data.box_next
+        data.box_next = (slot + 1) % BOX_STORE_SIZE
+        data.box_count = min(data.box_count + 1, BOX_STORE_SIZE)
+    key = data.box_keys + 2 * n * slot
+    memcpy(key, lower, n * cython.sizeof(cython.double))
+    memcpy(key + n, upper, n * cython.sizeof(cython.double))
+    memcpy(
+        data.box_enclosures + size * slot,
+        data.enclosure_next,
+        size * cython.sizeof(cython.double),
+    )
 
 
 @cython.cfunc
@@ -178,21 +274,42 @@ def run(
             inputs[index] = data.params
         elif slot == SLOT_STATE:
             inputs[index] = data.state
+        elif slot == SLOT_ENCLOSURE:
+            inputs[index] = data.enclosure
         else:
             inputs[index] = function.inputs[slot]
+    has_state: cython.bint = (
+        program == PROGRAM_VALUE_AND_GRADIENT and spec.num_outputs > 2
+    )
+    has_enclosures: cython.bint = (
+        program == PROGRAM_CONVEX
+        or program == PROGRAM_CONCAVE
+        or program == PROGRAM_INTERVAL
+    ) and spec.num_outputs > 2
+    if has_enclosures:
+        choose_enclosure(data)
     outputs: cython.p_double[MAX_OUTPUTS]
     outputs[0] = first
     outputs[1] = second
-    outputs[2] = data.state_next if spec.num_outputs > 2 else cython.NULL
+    outputs[2] = (
+        data.state_next
+        if has_state
+        else data.enclosure_next
+        if has_enclosures
+        else cython.NULL
+    )
     start: cython.double = now()
     status: cython.int = execute(spec, inputs, outputs, data.switches.zero_copy)
-    # The roots a run found are the guesses of the next run.
-    if status == 0 and spec.num_outputs > 2:
-        memcpy(
-            data.state.host,
-            data.state_next,
-            function.state_size * cython.sizeof(cython.double),
-        )
+    if status == 0:
+        # The roots a run found are the guesses of the next run.
+        if has_state:
+            memcpy(
+                data.state.host,
+                data.state_next,
+                function.state_size * cython.sizeof(cython.double),
+            )
+        elif has_enclosures:
+            remember_enclosure(data)
     function.statistics.runs[callback] += 1
     function.statistics.seconds[callback] += now() - start
     return status
@@ -243,6 +360,19 @@ def new_expr_data(
         for index in range(k):
             data.state.host[index] = NAN
             data.state_next[index] = NAN
+
+    # The enclosures of the roots begin as NaN too, and the store of boxes is empty.
+    size: cython.int = function.enclosure_size
+    if size > 0:
+        data.enclosure.host = aligned_doubles(size)
+        data.enclosure.size = size
+        data.enclosure.buffer = alias_buffer(data.enclosure.host, size)
+        data.enclosure_next = aligned_doubles(size)
+        data.box_keys = aligned_doubles(BOX_STORE_SIZE * 2 * n)
+        data.box_enclosures = aligned_doubles(BOX_STORE_SIZE * size)
+        for index in range(size):
+            data.enclosure.host[index] = NAN
+            data.enclosure_next[index] = NAN
 
     # All caches live in one block, laid out one after another.
     total: cython.size_t = (
@@ -296,6 +426,12 @@ def free_expr_data(data: cython.pointer[ExprData]) -> cython.void:
         destroy_buffer(data.state.buffer)
         free(data.state.host)
         free(data.state_next)
+    if data.function.enclosure_size > 0:
+        destroy_buffer(data.enclosure.buffer)
+        free(data.enclosure.host)
+        free(data.enclosure_next)
+        free(data.box_keys)
+        free(data.box_enclosures)
     free(data.cache_block)
     free(data)
 
@@ -1224,14 +1360,18 @@ class FunctionHandle:
         num_params: cython.int,
         programs: Programs,
         state_size: cython.int = 0,
+        enclosure_size: cython.int = 0,
     ) -> None:
         require_runtime()
         if num_inputs < 1:
             raise ValueError("A function needs at least one input")
-        if state_size < 0:
-            raise ValueError("The warm start cannot have a negative size")
+        if state_size < 0 or enclosure_size < 0:
+            raise ValueError(
+                "The warm start and the enclosures cannot have a negative size"
+            )
         self.num_inputs = num_inputs
         self.state_size = state_size
+        self.enclosure_size = enclosure_size
         self.num_params = max(num_params, 1)
         self.programs = programs
         function: cython.pointer[Function] = cython.cast(
@@ -1242,6 +1382,7 @@ class FunctionHandle:
         function.n = num_inputs
         function.m = self.num_params
         function.state_size = state_size
+        function.enclosure_size = enclosure_size
         function.scratch = aligned_doubles(num_inputs)
         slot: cython.int
         for slot in range(SLOT_PARAMS):
@@ -1260,8 +1401,8 @@ class FunctionHandle:
                 if program not in (Program.HESSIAN_VECTOR, Program.GRADIENT_INTERVAL):
                     raise ValueError(f"The {program.name.lower()} program is required")
                 continue
-            sizes = output_sizes(program, num_inputs, state_size)
-            slots = program_slots(program, state_size)
+            sizes = output_sizes(program, num_inputs, state_size, enclosure_size)
+            slots = program_slots(program, state_size, enclosure_size)
             if executable.num_outputs != len(sizes):
                 raise ValueError(
                     f"The {program.name.lower()} program has {executable.num_outputs} outputs, "
@@ -1387,6 +1528,78 @@ class FunctionHandle:
                     self.state_size * cython.sizeof(cython.double),
                 )
             results.append((value, state.copy()))
+        free_expr_data(data)
+        return results
+
+    def relaxation_runs(
+        self,
+        x: cython.double[::1],
+        lower: cython.double[:, ::1],
+        upper: cython.double[:, ::1],
+        params: cython.double[::1],
+        overestimate: cython.bint = False,
+    ) -> list[tuple[float, np.ndarray, np.ndarray]]:
+        """Runs the convex or concave program on a sequence of boxes of one expression.
+
+        The expression keeps the enclosures of the roots that earlier runs verified, as it
+        does inside SCIP. For each box the result holds the value of the relaxation at `x`,
+        a copy of the enclosure that the run started from, which is NaN where no stored box
+        contained the box, and a copy of the enclosure that the run verified.
+        """
+        if lower.shape[0] != upper.shape[0] or lower.shape[1] != upper.shape[1]:
+            raise ValueError("The lower and upper bounds need the same shape")
+        if lower.shape[0] > 0:
+            check_length("lower[0]", lower[0], self.num_inputs)
+        self.set_input(SLOT_X, x)
+        data: cython.pointer[ExprData] = direct_data(
+            self, params, switches_from(DIRECT_SWITCHES)
+        )
+        program: cython.int = PROGRAM_CONCAVE if overestimate else PROGRAM_CONVEX
+        value: cython.double = 0.0
+        gradient = np.empty(self.num_inputs)
+        view: cython.double[::1] = gradient
+        started = np.empty(self.enclosure_size)
+        started_view: cython.double[::1] = started
+        found = np.empty(self.enclosure_size)
+        found_view: cython.double[::1] = found
+        size: cython.size_t = self.num_inputs * cython.sizeof(cython.double)
+        results: list[tuple[float, np.ndarray, np.ndarray]] = []
+        box: cython.int
+        status: cython.int
+        for box in range(lower.shape[0]):
+            memcpy(
+                self.function.inputs[SLOT_LOWER].host,
+                cython.address(lower[box, 0]),
+                size,
+            )
+            memcpy(
+                self.function.inputs[SLOT_UPPER].host,
+                cython.address(upper[box, 0]),
+                size,
+            )
+            status = run(
+                data,
+                program,
+                cython.address(value),
+                cython.address(view[0]),
+                CALLBACK_ESTIMATE,
+            )
+            # A program fails to run only if the plugin fails.
+            if status != 0:
+                free_expr_data(data)  # pragma: no cover
+                raise_last_error("relaxation")  # pragma: no cover
+            if self.enclosure_size > 0:
+                memcpy(
+                    cython.address(started_view[0]),
+                    data.enclosure.host,
+                    self.enclosure_size * cython.sizeof(cython.double),
+                )
+                memcpy(
+                    cython.address(found_view[0]),
+                    data.enclosure_next,
+                    self.enclosure_size * cython.sizeof(cython.double),
+                )
+            results.append((value, started.copy(), found.copy()))
         free_expr_data(data)
         return results
 

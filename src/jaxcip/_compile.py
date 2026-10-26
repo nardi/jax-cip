@@ -193,6 +193,9 @@ class HandleBuilder:
 
     def request(self, term: Term, signature: TermSignature) -> RequestedTerm:
         """Starts building the programs of a term unless they are ready or being built."""
+        if self.options.relaxation.tighten_bounds:
+            # Tightening the bounds of intermediate values cannot reuse enclosures of roots.
+            signature = signature._replace(enclosure_size=0)
         key = _cache.term_key(str(term.jaxpr), term.signs, signature, self.programs)
         if key not in self.handles and key not in self.builds:
             handle = compiled_terms.get(key)
@@ -223,6 +226,7 @@ class HandleBuilder:
             signature.num_params,
             Programs._make(built.executables),
             signature.state_size,
+            signature.enclosure_size,
         )
         self.handles[requested.key] = handle
         compiled_terms[requested.key] = handle

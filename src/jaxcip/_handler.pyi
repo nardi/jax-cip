@@ -6,9 +6,14 @@ from jaxcip._types import Estimator, HandlerStatistics, Interval, Program, Progr
 HANDLER_NAME: bytes
 PROGRAM_SLOTS: tuple[tuple[int, ...], ...]
 
-def program_slots(program: Program, state_size: int = 0) -> tuple[int, ...]: ...
+def program_slots(
+    program: Program, state_size: int = 0, enclosure_size: int = 0
+) -> tuple[int, ...]: ...
 def output_sizes(
-    program: Program, num_inputs: int, state_size: int = 0
+    program: Program,
+    num_inputs: int,
+    state_size: int = 0,
+    enclosure_size: int = 0,
 ) -> tuple[int, ...]: ...
 def check_length(name: str, values: object, expected: int) -> None: ...
 
@@ -20,10 +25,25 @@ class FunctionHandle:
     @property
     def state_size(self) -> int: ...
     @property
+    def enclosure_size(self) -> int: ...
+    @property
     def programs(self) -> Programs: ...
     def __init__(
-        self, num_inputs: int, num_params: int, programs: Programs, state_size: int = 0
+        self,
+        num_inputs: int,
+        num_params: int,
+        programs: Programs,
+        state_size: int = 0,
+        enclosure_size: int = 0,
     ) -> None: ...
+    def relaxation_runs(
+        self,
+        x: Float[np.ndarray, " n"],
+        lower: Float[np.ndarray, "boxes n"],
+        upper: Float[np.ndarray, "boxes n"],
+        params: Float[np.ndarray, " m"],
+        overestimate: bool = False,
+    ) -> list[tuple[float, Float[np.ndarray, " k"], Float[np.ndarray, " k"]]]: ...
     def statistics(self) -> HandlerStatistics: ...
     def reset_statistics(self) -> None: ...
     def set_input(self, slot: int, values: Float[np.ndarray, " n"]) -> None: ...
