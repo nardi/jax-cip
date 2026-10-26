@@ -407,8 +407,6 @@ def equation_linearity(equation: JaxprEqn, inputs: list[Linearity]) -> list[Line
             return linearity_of(
                 body.jaxpr, inputs, [Linearity.CONSTANT] * len(body.consts)
             )
-        case Jaxpr():
-            return linearity_of(body, inputs, ())
     if most is Linearity.NONLINEAR:
         return [Linearity.NONLINEAR] * count
     if name in LINEAR_PRIMITIVES:
