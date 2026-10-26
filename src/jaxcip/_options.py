@@ -69,6 +69,11 @@ class CompileOptions(NamedTuple):
 
     The directory is `JAXCIP_CACHE_DIR` if set, and `~/.cache/jaxcip` otherwise.
     """
+    threads: int | None = None
+    """Number of threads that lower and compile programs, or `None` for one per CPU core.
+
+    With 1, the programs are built one after another on the calling thread.
+    """
 
 
 class ScipSetting(NamedTuple):

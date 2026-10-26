@@ -214,6 +214,46 @@ def test_terms_are_reused() -> None:
     assert again.statistics.lowered == again.statistics.compiled == 0
 
 
+def distinct_terms_problem() -> jcp.Problem:
+    """Returns a problem with five nonlinear terms, of which two pairs share their structure."""
+    return jcp.Problem(
+        variables=jcp.Variable(lower=0.5, upper=2.0, shape=(4,)),
+        objective=lambda x, p: jnp.sum(x),
+        constraints=(
+            jcp.Constraint(lambda x, p: x[0] * x[1] + jnp.sin(x[2]), lower=0.2),
+            jcp.Constraint(lambda x, p: jnp.exp(x[1]) * x[3], upper=9.0),
+            jcp.Constraint(lambda x, p: x[2] * x[3] + jnp.sin(x[0]), lower=0.3),
+        ),
+    )
+
+
+@pytest.mark.parametrize("threads", [1, 2, None])
+def test_threads_build_the_same_terms(threads: int | None) -> None:
+    """Checks that the number of build threads changes neither the terms nor the result."""
+    jcp.clear_caches()
+    options = jcp.CompileOptions(disk_cache=False, threads=threads)
+    compiled = jcp.compile(distinct_terms_problem(), options=options)
+    statistics = compiled.statistics
+    # The first and the last constraint have a product and a sine of the same structure,
+    # which share their builds.
+    assert statistics.lowered == 3
+    assert statistics.reused == 2
+    assert statistics.wall_seconds > 0.0
+    assert jcp.solve(compiled).status is jcp.Status.OPTIMAL
+
+
+@pytest.mark.parametrize("threads", [1, 2])
+def test_build_failure_in_threads(threads: int) -> None:
+    """Checks that a failed build raises on the calling thread whatever the thread count."""
+    problem = jcp.Problem(
+        variables=jcp.Variable(lower=-1.0, upper=1.0, shape=(2,)),
+        objective=lambda x, p: jnp.where(x[0] > 0, x[0], x[1] ** 2),
+        constraints=(jcp.Constraint(lambda x, p: x[0] * x[1], lower=-1.0),),
+    )
+    with pytest.raises(Exception, match="relaxation rule"):
+        jcp.compile(problem, options=jcp.CompileOptions(threads=threads))
+
+
 def test_disk_cache_after_clearing(cache_directory: Path) -> None:
     """Checks that a build after clearing the caches in memory loads from disk."""
     problem = PROBLEMS["newton"]

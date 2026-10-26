@@ -13,6 +13,7 @@ import importlib.metadata
 import os
 import re
 import struct
+import threading
 import time
 from pathlib import Path
 from typing import NamedTuple
@@ -70,6 +71,9 @@ class BuildStatistics(NamedTuple):
     """Terms whose compiled programs were already in memory."""
     skipped: tuple[str, ...] = ()
     """Optional programs that were left out, with the reason."""
+    wall_seconds: float = 0.0
+    """Seconds the build took on the wall clock, which is less than the sum of the seconds
+    above when several threads build programs at once."""
 
     def add(self, other: "BuildStatistics") -> "BuildStatistics":
         """Returns the sum of two statistics."""
@@ -155,7 +159,7 @@ def term_key(
 
 def write_atomically(path: Path, data: bytes) -> None:
     """Writes a file that appears under its name only when complete."""
-    temporary = path.with_suffix(f".{os.getpid()}.tmp")
+    temporary = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
     temporary.write_bytes(data)
     temporary.replace(path)
 

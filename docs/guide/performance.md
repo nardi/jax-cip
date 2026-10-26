@@ -12,6 +12,13 @@ of a second to several seconds per program. Both results go to the disk cache, s
 next process will load executables instead (`loaded`), and a term already compiled in
 this process costs nothing (`reused`).
 
+Lowering and compiling run on a pool of threads, one per CPU core unless
+[`CompileOptions.threads`][jaxcip.CompileOptions] says otherwise. XLA compiles the
+programs of a term and of different terms at the same time. Lowering is Python code that
+holds the GIL, so it runs one term at a time. The `lower_seconds` and `compile_seconds` of
+a build add up the time of every thread, and `wall_seconds` is the time the build took on
+the clock. On four cores, 24 terms with different structure build in 37 s instead of 55 s.
+
 <!-- name: test_performance -->
 ```python
 import jax.numpy as jnp

@@ -6,10 +6,13 @@ values, so one compiled problem solves for many of them.
 """
 
 import math
+import os
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Sequence
-from typing import Any, NamedTuple
+from concurrent.futures import Executor, Future, ThreadPoolExecutor
+from types import TracebackType
+from typing import Any, NamedTuple, Self
 
 import jax
 import jax.numpy as jnp
@@ -33,6 +36,7 @@ from jaxcip._programs import (
     lower_programs,
     term_signature,
 )
+from jaxcip._runtime import Executable
 from jaxcip._types import Domain, Programs
 
 COMPILED_TERMS_LIMIT = 64
@@ -113,6 +117,157 @@ class CompiledTerm(NamedTuple):
     handle: FunctionHandle
 
 
+class RequestedTerm(NamedTuple):
+    """A nonlinear term whose programs a `HandleBuilder` is building."""
+
+    term: Term
+    signature: TermSignature
+    key: str
+    """The key of the term's programs, from which the builder returns the handle."""
+
+
+class BuiltPrograms(NamedTuple):
+    """The compiled programs of a term, in the order of `Program`, and the cost of building them."""
+
+    executables: tuple[Executable | None, ...]
+    statistics: _cache.BuildStatistics
+
+
+class InlineExecutor(Executor):
+    """An executor that runs each call at once on the calling thread."""
+
+    def submit[**Parameters, Result](
+        self,
+        function: Callable[Parameters, Result],
+        /,
+        *args: Parameters.args,
+        **kwargs: Parameters.kwargs,
+    ) -> Future[Result]:
+        """Runs a call and returns a future that is already done."""
+        future: Future[Result] = Future()
+        try:
+            future.set_result(function(*args, **kwargs))
+        except Exception as error:
+            future.set_exception(error)
+        return future
+
+
+class HandleBuilder:
+    """Builds the handles of terms, lowering and compiling their programs on threads.
+
+    `request` starts building a term and `resolve` returns its handle. Terms with the same
+    key share one build. Lowering a term runs on one pool and compiles each of its programs
+    on another, so a term waits for its compiles without blocking other compiles. Use the
+    builder as a context manager, so that the threads stop when building fails.
+    """
+
+    def __init__(self, options: CompileOptions) -> None:
+        self.options = options
+        self.programs = program_options(options)
+        threads = options.threads or os.cpu_count() or 1
+        self.lowering: Executor
+        self.compiling: Executor
+        if threads > 1:
+            self.lowering = ThreadPoolExecutor(threads, "jaxcip-lower")
+            self.compiling = ThreadPoolExecutor(threads, "jaxcip-compile")
+        else:
+            self.lowering = self.compiling = InlineExecutor()
+        self.builds: dict[str, Future[BuiltPrograms]] = {}
+        """Builds that were started, by term key."""
+        self.handles: dict[str, FunctionHandle] = {}
+        """Handles that are ready, by term key."""
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        error_type: type[BaseException] | None,
+        error: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.lowering.shutdown(wait=True, cancel_futures=True)
+        self.compiling.shutdown(wait=True, cancel_futures=True)
+
+    def request(self, term: Term, signature: TermSignature) -> RequestedTerm:
+        """Starts building the programs of a term unless they are ready or being built."""
+        key = _cache.term_key(str(term.jaxpr), term.signs, signature, self.programs)
+        if key not in self.handles and key not in self.builds:
+            handle = compiled_terms.get(key)
+            if handle is not None:
+                compiled_terms.move_to_end(key)
+                self.handles[key] = handle
+            else:
+                self.builds[key] = self.lowering.submit(
+                    self.build_programs, key, term, signature
+                )
+        return RequestedTerm(term, signature, key)
+
+    def resolve(
+        self, requested: RequestedTerm
+    ) -> tuple[FunctionHandle, _cache.BuildStatistics]:
+        """Waits for the programs of a requested term and returns its handle.
+
+        Only the first call for a key returns the cost of the build. Later calls return a
+        reused handle.
+        """
+        handle = self.handles.get(requested.key)
+        if handle is not None:
+            return handle, _cache.BuildStatistics(reused=1)
+        built = self.builds[requested.key].result()
+        signature = requested.signature
+        handle = FunctionHandle(
+            signature.num_inputs,
+            signature.num_params,
+            Programs._make(built.executables),
+        )
+        self.handles[requested.key] = handle
+        compiled_terms[requested.key] = handle
+        # Problems that still use an evicted handle keep it alive themselves.
+        while len(compiled_terms) > COMPILED_TERMS_LIMIT:
+            compiled_terms.popitem(last=False)
+        return handle, built.statistics
+
+    def build_programs(
+        self, key: str, term: Term, signature: TermSignature
+    ) -> BuiltPrograms:
+        """Lowers a term, or loads it from the disk cache, and compiles its programs."""
+        disk_cache = self.options.disk_cache
+        statistics = _cache.BuildStatistics()
+        start = time.perf_counter()
+        lowered = _cache.load_lowered(key) if disk_cache else None
+        if lowered is None:
+            lowered, skipped = lower_programs(term, signature, self.programs)
+            statistics = statistics.add(
+                _cache.BuildStatistics(
+                    lower_seconds=time.perf_counter() - start,
+                    lowered=1,
+                    skipped=skipped,
+                )
+            )
+            if disk_cache:
+                _cache.store_lowered(key, lowered)
+        else:
+            statistics = statistics.add(
+                _cache.BuildStatistics(load_seconds=time.perf_counter() - start)
+            )
+        compiles = [
+            None
+            if program is None
+            else self.compiling.submit(_cache.compile_program, program, disk_cache)
+            for program in lowered
+        ]
+        executables: list[Executable | None] = []
+        for compiled in compiles:
+            if compiled is None:
+                executables.append(None)
+                continue
+            executable, built = compiled.result()
+            statistics = statistics.add(built)
+            executables.append(executable)
+        return BuiltPrograms(tuple(executables), statistics)
+
+
 class Block(NamedTuple):
     """Rows of a problem that come from one function.
 
@@ -160,36 +315,63 @@ def compile(  # noqa: A001
     """
     _cache.enable_x64()
     _cache.initialize()
+    start = time.perf_counter()
     variables = variable_layout(problem.variables)
     leaves, structure = jax.tree.flatten(params)
     params_layout = ParamsLayout(structure, tuple(as_aval(leaf) for leaf in leaves))
-    statistics = _cache.BuildStatistics()
-    objective = None
-    if problem.objective is not None:
-        objective, built = function_block(
-            problem.objective, -math.inf, math.inf, variables, params_layout, options
-        )
-        statistics = statistics.add(built)
-        if objective.analysis.shape != ():
-            raise ValueError(
-                f"The objective must return a scalar, not shape {objective.analysis.shape}."
+    # All blocks are analysed and their programs requested before any term is waited for,
+    # so the builder lowers and compiles terms of different blocks at the same time.
+    with HandleBuilder(options) as builder:
+        objective_request = None
+        if problem.objective is not None:
+            objective_request = function_block(
+                problem.objective,
+                -math.inf,
+                math.inf,
+                variables,
+                params_layout,
+                options,
+                builder,
             )
-    blocks = []
-    for constraint in problem.constraints:
-        match constraint:
-            case Constraint(function, lower, upper):
-                block, built = function_block(
-                    function, lower, upper, variables, params_layout, options
+            if objective_request.block.analysis.shape != ():
+                raise ValueError(
+                    "The objective must return a scalar, "
+                    f"not shape {objective_request.block.analysis.shape}."
                 )
-            case BatchedConstraint():
-                block, built = batched_block(constraint, variables, options)
-            case _:
-                raise TypeError(
-                    "A constraint must be a Constraint or a BatchedConstraint, "
-                    f"not {type(constraint).__name__}."
-                )
-        statistics = statistics.add(built)
-        blocks.append(block)
+        requests = []
+        for constraint in problem.constraints:
+            match constraint:
+                case Constraint(function, lower, upper):
+                    requests.append(
+                        function_block(
+                            function,
+                            lower,
+                            upper,
+                            variables,
+                            params_layout,
+                            options,
+                            builder,
+                        )
+                    )
+                case BatchedConstraint():
+                    requests.append(
+                        batched_block(constraint, variables, options, builder)
+                    )
+                case _:
+                    raise TypeError(
+                        "A constraint must be a Constraint or a BatchedConstraint, "
+                        f"not {type(constraint).__name__}."
+                    )
+        statistics = _cache.BuildStatistics()
+        objective = None
+        if objective_request is not None:
+            objective, built = finish_block(objective_request, builder)
+            statistics = statistics.add(built)
+        blocks = []
+        for request in requests:
+            block, built = finish_block(request, builder)
+            statistics = statistics.add(built)
+            blocks.append(block)
     return CompiledProblem(
         problem=problem,
         options=options,
@@ -197,7 +379,7 @@ def compile(  # noqa: A001
         params=params_layout,
         objective=objective,
         constraints=tuple(blocks),
-        statistics=statistics,
+        statistics=statistics._replace(wall_seconds=time.perf_counter() - start),
     )
 
 
@@ -246,6 +428,14 @@ def variable_layout(variables: PyTree[Any]) -> VariableLayout:
     )
 
 
+class RequestedBlock(NamedTuple):
+    """A block whose terms are being built, which `finish_block` completes."""
+
+    block: Block
+    """The block without its compiled terms."""
+    terms: tuple[RequestedTerm, ...]
+
+
 def function_block(
     function: ParametricFunction,
     lower: Any,
@@ -253,7 +443,8 @@ def function_block(
     variables: VariableLayout,
     params: ParamsLayout,
     options: CompileOptions,
-) -> tuple[Block, _cache.BuildStatistics]:
+    builder: HandleBuilder,
+) -> RequestedBlock:
     """Returns the block of a function of all variables and parameters."""
     num_leaves = len(variables.shapes)
 
@@ -267,23 +458,29 @@ def function_block(
         jax.ShapeDtypeStruct(shape, jnp.float64) for shape in variables.shapes
     ]
     analysis = analyse(flat, variable_avals, params.avals, options.split_sums)
-    terms, statistics = compile_terms(analysis, options)
+    terms = request_terms(analysis, builder)
     affine = None
     if analysis.affine is not None:
         affine = jax.jit(affine_function(analysis, variable_avals, batched=False))
-    return Block(
-        analysis=analysis,
-        terms=terms,
-        lower=row_bounds(lower, analysis.shape),
-        upper=row_bounds(upper, analysis.shape),
-        batch=None,
-        affine=affine,
-    ), statistics
+    return RequestedBlock(
+        Block(
+            analysis=analysis,
+            terms=(),
+            lower=row_bounds(lower, analysis.shape),
+            upper=row_bounds(upper, analysis.shape),
+            batch=None,
+            affine=affine,
+        ),
+        terms,
+    )
 
 
 def batched_block(
-    constraint: BatchedConstraint, variables: VariableLayout, options: CompileOptions
-) -> tuple[Block, _cache.BuildStatistics]:
+    constraint: BatchedConstraint,
+    variables: VariableLayout,
+    options: CompileOptions,
+    builder: HandleBuilder,
+) -> RequestedBlock:
     """Returns the block of a batched constraint."""
     inputs = np.asarray(constraint.inputs, dtype=np.intc)
     if inputs.ndim != 2:
@@ -310,18 +507,34 @@ def batched_block(
         raise ValueError(
             f"The function of a batched constraint must return a scalar, not {analysis.shape}."
         )
-    terms, statistics = compile_terms(analysis, options)
+    terms = request_terms(analysis, builder)
     affine = None
     if analysis.affine is not None:
         affine = jax.jit(affine_function(analysis, variable_avals, batched=True))
-    return Block(
-        analysis=analysis,
-        terms=terms,
-        lower=row_bounds(constraint.lower, (rows,)),
-        upper=row_bounds(constraint.upper, (rows,)),
-        batch=constraint._replace(inputs=inputs, params=arrays),
-        affine=affine,
-    ), statistics
+    return RequestedBlock(
+        Block(
+            analysis=analysis,
+            terms=(),
+            lower=row_bounds(constraint.lower, (rows,)),
+            upper=row_bounds(constraint.upper, (rows,)),
+            batch=constraint._replace(inputs=inputs, params=arrays),
+            affine=affine,
+        ),
+        terms,
+    )
+
+
+def finish_block(
+    requested: RequestedBlock, builder: HandleBuilder
+) -> tuple[Block, _cache.BuildStatistics]:
+    """Waits for the programs of a block's terms and returns the block with its compiled terms."""
+    statistics = _cache.BuildStatistics()
+    terms = []
+    for term in requested.terms:
+        handle, built = builder.resolve(term)
+        statistics = statistics.add(built)
+        terms.append(CompiledTerm(term.term, term.signature, handle))
+    return requested.block._replace(terms=tuple(terms)), statistics
 
 
 def row_bounds(bound: Any, shape: tuple[int, ...]) -> Float[np.ndarray, " rows"]:
@@ -339,62 +552,14 @@ def program_options(options: CompileOptions) -> ProgramOptions:
     )
 
 
-def compile_terms(
-    analysis: Analysis, options: CompileOptions
-) -> tuple[tuple[CompiledTerm, ...], _cache.BuildStatistics]:
-    """Builds the programs of the nonlinear terms of an analysis."""
-    statistics = _cache.BuildStatistics()
-    terms = []
-    for term in analysis.nonlinear:
-        signature = term_signature(term, analysis.shape)
-        handle, built = build_handle(term, signature, options)
-        statistics = statistics.add(built)
-        terms.append(CompiledTerm(term, signature, handle))
-    return tuple(terms), statistics
-
-
-def build_handle(
-    term: Term, signature: TermSignature, options: CompileOptions
-) -> tuple[FunctionHandle, _cache.BuildStatistics]:
-    """Returns the compiled programs of a term, from memory, the disk cache or a new build."""
-    programs = program_options(options)
-    key = _cache.term_key(str(term.jaxpr), term.signs, signature, programs)
-    handle = compiled_terms.get(key)
-    if handle is not None:
-        compiled_terms.move_to_end(key)
-        return handle, _cache.BuildStatistics(reused=1)
-    statistics = _cache.BuildStatistics()
-    start = time.perf_counter()
-    lowered = _cache.load_lowered(key) if options.disk_cache else None
-    if lowered is None:
-        lowered, skipped = lower_programs(term, signature, programs)
-        statistics = statistics.add(
-            _cache.BuildStatistics(
-                lower_seconds=time.perf_counter() - start, lowered=1, skipped=skipped
-            )
-        )
-        if options.disk_cache:
-            _cache.store_lowered(key, lowered)
-    else:
-        statistics = statistics.add(
-            _cache.BuildStatistics(load_seconds=time.perf_counter() - start)
-        )
-    executables = []
-    for program in lowered:
-        if program is None:
-            executables.append(None)
-            continue
-        executable, built = _cache.compile_program(program, options.disk_cache)
-        statistics = statistics.add(built)
-        executables.append(executable)
-    handle = FunctionHandle(
-        signature.num_inputs, signature.num_params, Programs._make(executables)
+def request_terms(
+    analysis: Analysis, builder: HandleBuilder
+) -> tuple[RequestedTerm, ...]:
+    """Starts building the programs of the nonlinear terms of an analysis."""
+    return tuple(
+        builder.request(term, term_signature(term, analysis.shape))
+        for term in analysis.nonlinear
     )
-    compiled_terms[key] = handle
-    # Problems that still use an evicted handle keep it alive themselves.
-    while len(compiled_terms) > COMPILED_TERMS_LIMIT:
-        compiled_terms.popitem(last=False)
-    return handle, statistics
 
 
 def affine_function(

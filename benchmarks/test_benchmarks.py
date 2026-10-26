@@ -196,6 +196,43 @@ def test_cold_build_time(benchmark: BenchmarkFixture, name: str) -> None:
     )
 
 
+def distinct_terms() -> jcp.Problem:
+    """Returns a problem of 24 constraints, each with a nonlinear term of its own structure."""
+    functions = [jnp.exp, jnp.sin, jnp.cos, jnp.tanh, jnp.log1p, jnp.sqrt]
+    constraints = tuple(
+        jcp.Constraint(
+            lambda x, params, index=index, inner=functions[index % 6]: (
+                x[index % 8] ** (2 + index // 6) * inner(x[(index + 1) % 8])
+            ),
+            upper=50.0,
+        )
+        for index in range(24)
+    )
+    return jcp.Problem(
+        variables=jcp.Variable(lower=0.5, upper=2.0, shape=(8,)),
+        objective=lambda x, params: jnp.sum(x),
+        constraints=constraints,
+    )
+
+
+@pytest.mark.parametrize("threads", [1, None], ids=["one_thread", "all_threads"])
+def test_cold_build_threads(benchmark: BenchmarkFixture, threads: int | None) -> None:
+    """Measures building many different terms on one thread and on one thread per core."""
+    problem = distinct_terms()
+    options = jcp.CompileOptions(disk_cache=False, threads=threads)
+    benchmark.extra_info.update(
+        kind="cold_build",
+        name=f"distinct_terms.{'one_thread' if threads == 1 else 'all_threads'}",
+        reference=MACHINE_REFERENCE,
+    )
+    benchmark.pedantic(
+        jcp.compile,
+        args=(problem, None, options),
+        setup=jcp.clear_caches,
+        rounds=2,
+    )
+
+
 @pytest.mark.parametrize("name", sorted(PROBLEMS))
 def test_warm_build_time(benchmark: BenchmarkFixture, name: str) -> None:
     """Measures building a problem whose programs are in the disk cache."""
