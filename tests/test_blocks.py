@@ -925,3 +925,18 @@ def test_the_pattern_cache_forgets_the_oldest_pattern(
     for term in (first, second):
         _blocks.pattern_of(term.term, term.signature)
     assert len(patterns) == 1
+
+
+def test_a_function_that_asdex_cannot_analyse_reads_every_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks the pattern when the sparsity detection has no rule for a primitive."""
+
+    def refuse(*arguments: Any, **keywords: Any) -> None:
+        raise NotImplementedError("No handler for the primitive.")
+
+    monkeypatch.setattr(_blocks.asdex, "jacobian_sparsity", refuse)
+    term, _ = block_of("neighbours")
+    pattern = detect_pattern(block_function(term.term, term.signature), term.signature)
+    assert pattern.nnz == 5 * WIDTH
+    np.testing.assert_array_equal(pattern.pointers, np.arange(0, 5 * WIDTH + 1, WIDTH))

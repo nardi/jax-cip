@@ -49,6 +49,12 @@ detection_lock = threading.Lock()
 DENSE_FRACTION = 0.5
 """Share of the variables that the entries of a dense cut read, on average."""
 
+SMALL_BLOCK = 64
+"""Largest number of entries times inputs of a cut that is kept with its sum or product.
+
+Splitting a small cut gives SCIP several expressions and more callbacks for no gain in
+sparsity."""
+
 PATTERN_CACHE_LIMIT = 256
 """Number of patterns that are kept, so that the analysis and the lowering of a term share one."""
 
@@ -113,14 +119,17 @@ def pattern_of(term: Term, signature: TermSignature) -> BlockPattern:
 
 
 def is_dense(term: Term, shape: tuple[int, ...]) -> bool:
-    """Returns whether the entries of a cut with several entries read most of its variables.
+    """Returns whether a cut with several entries is not worth separating from what follows.
 
-    Separating such a cut from the linear operation that follows it would give SCIP many
-    expressions that each read everything, instead of one.
+    That is the case for a small cut, and for one whose entries read most of its variables.
+    Separating the latter would give SCIP many expressions that each read everything,
+    instead of one.
     """
     signature = term_signature(term, shape)
-    pattern = pattern_of(term, signature)
-    return pattern.nnz > DENSE_FRACTION * signature.num_entries * signature.num_inputs
+    size = signature.num_entries * signature.num_inputs
+    if size <= SMALL_BLOCK:
+        return True
+    return pattern_of(term, signature).nnz > DENSE_FRACTION * size
 
 
 def vector_avals(*sizes: int) -> tuple[jax.ShapeDtypeStruct, ...]:

@@ -29,7 +29,9 @@ def affine_cases() -> dict[str, Callable[[Variables, jax.Array], jax.Array]]:
     return {
         "differences": lambda x, p: x.vector[:-1] - 2 * x.vector[1:] + p[0],
         "sum": lambda x, p: jnp.sum(x.vector) * p[1] + jnp.sum(x.matrix),
-        "matrix_product": lambda x, p: x.matrix @ x.vector[:2] + p[:3],
+        "matrix_product": lambda x, p: (
+            jnp.arange(6.0).reshape(3, 2) @ x.vector[:2] + p[:3]
+        ),
         "parameter_matrix": lambda x, p: jnp.outer(p, p)[:2, :3] @ x.matrix[:, 0],
         "gather": lambda x, p: x.vector[index] * p[:4] - x.matrix.reshape(-1)[:4],
         "cumulative": lambda x, p: (
