@@ -1,6 +1,7 @@
 """Tests of solving problems, compared with SCIP's native solves of the same problems."""
 
 import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Generic, NamedTuple, TypeVar
 
@@ -8,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from jax import lax
 
 import jaxcip as jcp
 from jaxcip import _compile
@@ -450,6 +452,42 @@ def test_skipped_programs(monkeypatch: pytest.MonkeyPatch) -> None:
     assert any("switched off" in reason for reason in off.statistics.skipped)
     failing = jcp.compile(problem._replace(objective=lambda x, p: jnp.abs(x[0]) * x[1]))
     assert any("Error" in reason for reason in failing.statistics.skipped)
+
+
+def cubic_root(x: jax.Array) -> jax.Array:
+    """Returns the root `y` of `y³ + y = x[0]`, found by 20 Newton steps in `lax.custom_root`."""
+
+    def residual(y: jax.Array) -> jax.Array:
+        return y**3 + y - x[0]
+
+    def newton(function: Callable[..., Any], guess: jax.Array) -> jax.Array:
+        derivative = jax.grad(function)
+        return lax.fori_loop(0, 20, lambda _, y: y - function(y) / derivative(y), guess)
+
+    def tangent_solve(function: Callable[..., Any], value: jax.Array) -> jax.Array:
+        return value / jax.grad(function)(0.0)
+
+    return lax.custom_root(residual, 0.0, newton, tangent_solve)
+
+
+def test_implicit_root_term() -> None:
+    """Checks that a root found by `lax.custom_root` compiles and solves in the PJRT plugin.
+
+    The relaxation of a root needs a matrix inverse, which must not be a LAPACK call. The
+    minimum of `(y - 1/2)²` is at the `x` whose root is `1/2`, which is `1/2 + 1/8`.
+    """
+    problem = jcp.Problem(
+        variables=jcp.Variable(lower=-2.0, upper=2.0, shape=(1,)),
+        objective=lambda x, p: (cubic_root(x) - 0.5) ** 2,
+    )
+    compiled = jcp.compile(problem, options=jcp.CompileOptions(disk_cache=False))
+    # JAXormick has no rule for the gradient of a root, so there is no monotonicity.
+    assert any("GRADIENT_INTERVAL" in reason for reason in compiled.statistics.skipped)
+    solution = jcp.solve(compiled)
+    assert solution.status is jcp.Status.OPTIMAL
+    assert solution.x is not None
+    assert float(solution.x[0]) == pytest.approx(0.625, abs=1e-5)
+    assert solution.objective == pytest.approx(0.0, abs=1e-6)
 
 
 def test_required_program_failure() -> None:

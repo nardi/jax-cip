@@ -549,7 +549,7 @@ dev = [
 requires-dist = [
     { name = "asdex", git = "https://github.com/adrhill/asdex?rev=da130b048b72c03e5ac1cb154968797bc32868b8" },
     { name = "jax", specifier = ">=0.11,<0.12" },
-    { name = "jaxormick", git = "https://github.com/nardi/jaxormick?rev=2206e3e73038c0b96897d24b8b384ba38479d04a" },
+    { name = "jaxormick", git = "https://github.com/nardi/jaxormick?rev=8980dfb3ca616d2c35d96b4a2e1dfaa09bf3aea1" },
     { name = "jaxtyping", specifier = ">=0.2" },
     { name = "numpy", specifier = ">=1.26" },
 ]
@@ -613,7 +613,7 @@ wheels = [
 [[package]]
 name = "jaxormick"
 version = "0.0.1"
-source = { git = "https://github.com/nardi/jaxormick?rev=2206e3e73038c0b96897d24b8b384ba38479d04a#2206e3e73038c0b96897d24b8b384ba38479d04a" }
+source = { git = "https://github.com/nardi/jaxormick?rev=8980dfb3ca616d2c35d96b4a2e1dfaa09bf3aea1#8980dfb3ca616d2c35d96b4a2e1dfaa09bf3aea1" }
 dependencies = [
     { name = "equinox" },
     { name = "jax" },
