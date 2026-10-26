@@ -7,10 +7,12 @@ from typing import Any, NamedTuple
 import numpy as np
 from jaxtyping import Float, PyTree
 
+from jaxcip._block import BlockHandle, BlockStateRef
 from jaxcip._cache import BuildStatistics
 from jaxcip._compile import (
     Block,
     CompiledProblem,
+    block_inputs,
     compile,  # noqa: A004
     linear_rows,
     term_rows,
@@ -21,6 +23,7 @@ from jaxcip._problem import Scip
 from jaxcip._problem_types import Problem
 from jaxcip._scip_parameters import ScipParameter
 from jaxcip._types import (
+    BlockTerm,
     CallbackStatistics,
     Domain,
     HandlerStatistics,
@@ -163,7 +166,7 @@ def build_scip(compiled: CompiledProblem, params: PyTree[Any]) -> Scip:
                 bounds = (0.0, math.inf)
             case _:
                 raise AssertionError(f"Unknown sense {compiled.problem.sense}.")
-        terms = row_terms(objective_block, variables, param_leaves)[0]
+        terms = row_terms(objective_block, variables, param_leaves, handler)[0]
         scip.add_jax_constraint(
             terms,
             np.array([epigraph], np.intc),
@@ -188,11 +191,27 @@ def flat_domains(compiled: CompiledProblem) -> list[Domain]:
 
 
 def row_terms(
-    block: Block, variables: Any, param_leaves: list[np.ndarray]
-) -> list[list[JaxTerm]]:
-    """Returns the nonlinear terms of every row of a block."""
-    rows: list[list[JaxTerm]] = [[] for _ in range(block.rows)]
+    block: Block,
+    variables: Any,
+    param_leaves: list[np.ndarray],
+    handler: HandlerOptions,
+) -> list[list[JaxTerm | BlockTerm]]:
+    """Returns the nonlinear terms of every row of a block.
+
+    The entries of a block term share one state in the new SCIP instance.
+    """
+    rows: list[list[JaxTerm | BlockTerm]] = [[] for _ in range(block.rows)]
     for compiled in block.terms:
+        if isinstance(compiled.handle, BlockHandle):
+            block_variables, block_params = block_inputs(
+                compiled, block, variables, param_leaves
+            )
+            state = BlockStateRef(
+                compiled.handle, block_params, block_variables, handler
+            )
+            for row in range(block.rows):
+                rows[row].append(BlockTerm(state, row, 1.0))
+            continue
         inputs, params = term_rows(compiled, block, variables, param_leaves)
         for row in range(block.rows):
             rows[row].append(JaxTerm(compiled.handle, params[row], inputs[row], 1.0))
@@ -210,7 +229,7 @@ def add_block(
     variables = compiled.variables
     linear = linear_rows(block, variables, param_leaves)
     constant = linear.constants
-    terms = row_terms(block, variables, param_leaves)
+    terms = row_terms(block, variables, param_leaves, handler)
     for row in range(block.rows):
         lower, upper = block.lower[row], block.upper[row]
         if lower == -math.inf and upper == math.inf:
@@ -257,7 +276,9 @@ def apply_options(scip: Scip, options: SolveOptions) -> None:
         scip.set_parameter(parameter.path, setting.value)
 
 
-def distinct_handles(compiled: CompiledProblem) -> list[FunctionHandle]:
+def distinct_handles(
+    compiled: CompiledProblem,
+) -> list[FunctionHandle | BlockHandle]:
     """Returns every handle of a compiled problem once."""
     blocks = [compiled.objective, *compiled.constraints]
     handles = {

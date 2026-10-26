@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from conftest import scalar_handle
 from jax import lax
 from jaxormick._implicit import inverse
 
@@ -154,7 +155,7 @@ def test_nan_entries_fall_back_to_the_written_guess() -> None:
 def test_handler_carries_the_roots_between_runs() -> None:
     """Checks that each run starts from the roots of the run before."""
     _, term, params = compiled_root_term()
-    handle = term.handle
+    handle = scalar_handle(term)
     assert handle.state_size == SIZE
     x = np.array([0.6, -0.3])
     runs = handle.warm_runs(x, params, 3)
@@ -170,7 +171,7 @@ def test_handler_carries_the_roots_between_runs() -> None:
 def test_the_result_does_not_depend_on_the_start() -> None:
     """Checks that the value and the roots are the same for any warm start."""
     _, term, params = compiled_root_term()
-    handle = term.handle
+    handle = scalar_handle(term)
     x = np.array([-0.8, 0.9])
     [(cold_value, cold_roots)] = handle.warm_runs(x, params, 1)
     for start in ([5.0, -5.0], [0.1, 0.1], [np.nan, 2.0]):
@@ -188,10 +189,12 @@ def test_direct_calls_of_a_handle_with_roots() -> None:
     x, direction = np.array([0.6, -0.3]), np.array([0.5, 1.0])
     value, gradient = jax.value_and_grad(function)(jnp.asarray(x), jnp.asarray(params))
     hessian = jax.hessian(function)(jnp.asarray(x), jnp.asarray(params))
-    assert term.handle.evaluate(x, params) == pytest.approx(float(value), rel=1e-10)
-    got_value, got_gradient = term.handle.value_and_gradient(x, params)
+    assert scalar_handle(term).evaluate(x, params) == pytest.approx(
+        float(value), rel=1e-10
+    )
+    got_value, got_gradient = scalar_handle(term).value_and_gradient(x, params)
     np.testing.assert_allclose(got_gradient, gradient, rtol=1e-8, atol=1e-10)
-    product = term.handle.hessian_vector(x, direction, params)
+    product = scalar_handle(term).hessian_vector(x, direction, params)
     np.testing.assert_allclose(product, hessian @ direction, rtol=1e-6, atol=1e-8)
     assert got_value == pytest.approx(float(value), rel=1e-10)
 
@@ -204,7 +207,7 @@ def test_scip_hessian_with_roots() -> None:
     scip = Scip("roots")
     for _ in range(SIZE):
         scip.add_variable(-2.0, 2.0, 0.0, Domain.CONTINUOUS)
-    jax_term = JaxTerm(term.handle, params, np.arange(SIZE, dtype=np.intc), 1.0)
+    jax_term = JaxTerm(scalar_handle(term), params, np.arange(SIZE, dtype=np.intc), 1.0)
     product = scip.hessian_direction(jax_term, jcp.HandlerOptions(), x, direction)
     expected = jax.hessian(function)(jnp.asarray(x), jnp.asarray(params)) @ direction
     assert product is not None
@@ -229,11 +232,11 @@ def test_solving_with_a_warm_started_root() -> None:
 def test_handle_validation_with_roots() -> None:
     """Checks the errors of a warm start that the programs do not match."""
     _, term, _ = compiled_root_term()
-    programs: Programs = term.handle.programs
+    programs: Programs = scalar_handle(term).programs
     with pytest.raises(ValueError, match="negative"):
         FunctionHandle(SIZE, 1, programs, -1)
     with pytest.raises(ValueError, match="value_and_gradient program has 3 outputs"):
-        FunctionHandle(SIZE, term.handle.num_params, programs, 0)
+        FunctionHandle(SIZE, scalar_handle(term).num_params, programs, 0)
     assert output_sizes(Program.VALUE_AND_GRADIENT, SIZE, 4) == (1, SIZE, 4)
     assert program_slots(Program.CONVEX, 4) == program_slots(Program.CONVEX)
     assert len(program_slots(Program.HESSIAN_VECTOR, 4)) == 4
@@ -268,7 +271,7 @@ def boxes(
 def test_enclosures_pass_from_larger_boxes_to_smaller_ones() -> None:
     """Checks which stored box a run starts from: the smallest one around its box."""
     _, term, params = compiled_root_term()
-    handle = term.handle
+    handle = scalar_handle(term)
     assert handle.enclosure_size == 2 * SIZE
     lower, upper = boxes([0.15, 0.1, 0.05, 0.12])
     runs = handle.relaxation_runs(CENTRE, lower, upper, params)
@@ -293,8 +296,8 @@ def test_relaxations_from_stored_enclosures_stay_valid() -> None:
     for _ in range(5):
         x = CENTRE + rng.uniform(-0.04, 0.04, size=SIZE)
         truth = float(function(jnp.asarray(x), jnp.asarray(params)))
-        under = term.handle.relaxation_runs(x, lower, upper, params)
-        over = term.handle.relaxation_runs(x, lower, upper, params, True)
+        under = scalar_handle(term).relaxation_runs(x, lower, upper, params)
+        over = scalar_handle(term).relaxation_runs(x, lower, upper, params, True)
         for (low, _, _), (high, _, _) in zip(under, over, strict=True):
             assert low <= truth + 1e-9 <= high + 2e-9
 
@@ -303,7 +306,7 @@ def test_unverified_boxes_store_nothing() -> None:
     """Checks that a box too wide to verify leaves no enclosure behind."""
     _, term, params = compiled_root_term()
     lower, upper = boxes([1.0, 0.1])
-    wide, narrow = term.handle.relaxation_runs(CENTRE, lower, upper, params)
+    wide, narrow = scalar_handle(term).relaxation_runs(CENTRE, lower, upper, params)
     assert np.all(np.isnan(wide[2]))
     assert np.all(np.isnan(narrow[1])) and np.all(np.isfinite(narrow[2]))
 
@@ -311,7 +314,7 @@ def test_unverified_boxes_store_nothing() -> None:
 def test_the_store_keeps_the_newest_boxes() -> None:
     """Checks that a repeated box keeps its entry and that old entries make room."""
     _, term, params = compiled_root_term()
-    handle = term.handle
+    handle = scalar_handle(term)
     parent_lower, parent_upper = boxes([0.15])
     others = [np.array([0.6 + 0.3 * index, 0.5]) for index in range(8)]
     # A box that is run again replaces its entry, so many runs never push the parent out.
@@ -342,10 +345,14 @@ def test_relaxation_runs_checks_its_arguments() -> None:
     _, term, params = compiled_root_term()
     lower, upper = boxes([0.1, 0.2])
     with pytest.raises(ValueError, match="same shape"):
-        term.handle.relaxation_runs(CENTRE, lower, upper[:1], params)
+        scalar_handle(term).relaxation_runs(CENTRE, lower, upper[:1], params)
     with pytest.raises(ValueError, match="lower"):
-        term.handle.relaxation_runs(CENTRE, np.zeros((1, 5)), np.zeros((1, 5)), params)
-    assert term.handle.relaxation_runs(CENTRE, lower[:0], upper[:0], params) == []
+        scalar_handle(term).relaxation_runs(
+            CENTRE, np.zeros((1, 5)), np.zeros((1, 5)), params
+        )
+    assert (
+        scalar_handle(term).relaxation_runs(CENTRE, lower[:0], upper[:0], params) == []
+    )
 
 
 def test_tightened_bounds_leave_the_enclosures_out() -> None:
@@ -360,18 +367,18 @@ def test_tightened_bounds_leave_the_enclosures_out() -> None:
     compiled = jcp.compile(problem, options=options)
     block = compiled.objective
     assert block is not None
-    assert block.terms[0].handle.enclosure_size == 0
-    assert block.terms[0].handle.state_size == SIZE
+    assert scalar_handle(block.terms[0]).enclosure_size == 0
+    assert scalar_handle(block.terms[0]).state_size == SIZE
 
 
 def test_handle_validation_with_enclosures() -> None:
     """Checks the errors of enclosures that the programs do not match."""
     _, term, _ = compiled_root_term()
-    programs = term.handle.programs
+    programs = scalar_handle(term).programs
     with pytest.raises(ValueError, match="negative"):
         FunctionHandle(SIZE, 1, programs, SIZE, -1)
     with pytest.raises(ValueError, match="convex program has 3 outputs"):
-        FunctionHandle(SIZE, term.handle.num_params, programs, SIZE, 0)
+        FunctionHandle(SIZE, scalar_handle(term).num_params, programs, SIZE, 0)
     assert output_sizes(Program.CONVEX, SIZE, 0, 4) == (1, SIZE, 4)
     assert output_sizes(Program.INTERVAL, SIZE, 0, 4) == (1, 1, 4)
     assert len(program_slots(Program.INTERVAL, 0, 4)) == 4

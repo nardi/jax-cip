@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from conftest import scalar_handle
 
 import jaxcip as jcp
 from jaxcip import _rows
@@ -87,7 +88,7 @@ def test_row_values_match_the_function() -> None:
     for term in block.terms:
         inputs, params = term_rows(term, block, compiled.variables, [])
         for index in range(COUNT):
-            total[index] += term.term.signs[0] * term.handle.evaluate(
+            total[index] += term.term.signs[0] * scalar_handle(term).evaluate(
                 point[inputs[index]], params[index]
             )
     np.testing.assert_allclose(total, np.asarray(expected), rtol=1e-12)
@@ -243,7 +244,7 @@ def test_rows_with_constants_in_the_function() -> None:
     assert any(ref.origin is Origin.CONSTANT for ref in term.term.inputs)
     inputs, params = term_rows(term, block, compiled.variables, [])
     point = np.linspace(0.6, 1.9, WIDTH)
-    value = term.handle.evaluate(point[inputs[0]], params[0])
+    value = scalar_handle(term).evaluate(point[inputs[0]], params[0])
     assert value == pytest.approx(float(np.sum(scale * np.exp(point[TABLE[0]]))))
 
 

@@ -5,9 +5,11 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from jaxcip import _cache
+from jaxcip._blocks import BlockPattern, LoweredTerm
 from jaxcip._cache import (
     BuildStatistics,
     cache_directory,
@@ -23,13 +25,26 @@ from jaxcip._programs import LoweredProgram, LoweredPrograms, lower
 PROGRAM = LoweredProgram(code=b"\x00code\xff", text="module @x {}")
 """A stand-in for a lowered program, enough for encoding."""
 
-PROGRAMS = LoweredPrograms(PROGRAM, None, PROGRAM, PROGRAM, PROGRAM, None)
-"""Lowered programs with both optional programs left out."""
+PROGRAMS = LoweredTerm(
+    LoweredPrograms(PROGRAM, None, PROGRAM, PROGRAM, PROGRAM, None), None
+)
+"""A lowered term with both optional programs left out and no pattern."""
+
+BLOCK = LoweredTerm(
+    PROGRAMS.programs,
+    BlockPattern(np.array([0, 2, 3], np.intc), np.array([0, 1, 1], np.intc)),
+)
+"""A lowered block term, which has a pattern of two entries."""
 
 
 def test_encoding_round_trip() -> None:
-    """Checks that decoding returns the encoded programs."""
+    """Checks that decoding returns the encoded programs and pattern."""
     assert decode_lowered(encode_lowered(PROGRAMS)) == PROGRAMS
+    decoded = decode_lowered(encode_lowered(BLOCK))
+    assert decoded.programs == BLOCK.programs
+    assert decoded.pattern is not None
+    np.testing.assert_array_equal(decoded.pattern.pointers, [0, 2, 3])
+    np.testing.assert_array_equal(decoded.pattern.columns, [0, 1, 1])
 
 
 @pytest.mark.parametrize(
@@ -38,6 +53,7 @@ def test_encoding_round_trip() -> None:
         (b"other", "Not a file"),
         (encode_lowered(PROGRAMS)[:-3], "Malformed"),
         (encode_lowered(PROGRAMS)[:30], "Malformed"),
+        (encode_lowered(BLOCK)[:-3], "Malformed"),
         (encode_lowered(PROGRAMS) + b"x", "trailing bytes"),
         (encode_lowered(PROGRAMS).replace(b"module", b"\xffodule", 1), "Malformed"),
     ],

@@ -1,11 +1,14 @@
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 from jaxtyping import Float, Int
 
+from jaxcip._block import BlockHandle
 from jaxcip._handler import FunctionHandle
 from jaxcip._options import HandlerOptions
 from jaxcip._types import (
+    BlockTerm,
     Domain,
     Emphasis,
     JaxTerm,
@@ -24,7 +27,7 @@ def scip_version() -> ScipVersion: ...
 def parameter_table() -> tuple[tuple[str, ParameterType, str], ...]: ...
 
 class Scip:
-    handles: list[FunctionHandle]
+    handles: list[FunctionHandle | BlockHandle]
     def __init__(self, name: str) -> None: ...
     @staticmethod
     def read(path: Path) -> Scip: ...
@@ -48,7 +51,7 @@ class Scip:
     def variable_array(self, indices: Int[np.ndarray, " k"]) -> np.ndarray: ...
     def add_jax_constraint(
         self,
-        terms: list[JaxTerm],
+        terms: Sequence[JaxTerm | BlockTerm],
         linear_indices: Int[np.ndarray, " k"],
         linear_coefficients: Float[np.ndarray, " k"],
         constant: float,
@@ -76,9 +79,10 @@ class Scip:
     def solving_time(self) -> float: ...
     def best_solution(self) -> tuple[float, Float[np.ndarray, " n"]] | None: ...
     def check_solution(self, values: Float[np.ndarray, " n"]) -> bool: ...
+    def solve_copy(self) -> tuple[float, int]: ...
     def hessian_direction(
         self,
-        term: JaxTerm,
+        term: JaxTerm | BlockTerm,
         options: HandlerOptions,
         x: Float[np.ndarray, " n"],
         direction: Float[np.ndarray, " n"],

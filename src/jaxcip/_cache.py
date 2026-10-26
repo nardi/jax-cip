@@ -20,8 +20,10 @@ from typing import NamedTuple
 
 import jax
 import jaxormick
+import numpy as np
 
 from jaxcip import _runtime
+from jaxcip._blocks import BlockPattern, LoweredTerm
 from jaxcip._programs import (
     LoweredProgram,
     LoweredPrograms,
@@ -40,7 +42,7 @@ CACHE_ENVIRONMENT_VARIABLE = "JAXCIP_CACHE_DIR"
 LOCATION_PATTERN = re.compile(r"^#loc.*$|\s*loc\((?:[^()]|\([^()]*\))*\)", re.MULTILINE)
 """Source locations in StableHLO text, which differ between traces of the same function."""
 
-LOWERED_MAGIC = b"JAXCIP-LOWERED-2\n"
+LOWERED_MAGIC = b"JAXCIP-LOWERED-3\n"
 """First bytes of a file of lowered programs."""
 
 
@@ -164,25 +166,34 @@ def write_atomically(path: Path, data: bytes) -> None:
     temporary.replace(path)
 
 
-def encode_lowered(programs: LoweredPrograms) -> bytes:
-    """Returns lowered programs as bytes."""
+def encode_lowered(term: LoweredTerm) -> bytes:
+    """Returns the lowered programs of a term, and its pattern if it has one, as bytes."""
     parts = [LOWERED_MAGIC]
-    for program in programs:
+    for program in term.programs:
         if program is None:
             parts.append(struct.pack("<B", 0))
             continue
         text = program.text.encode()
         parts.append(struct.pack("<BQQ", 1, len(program.code), len(text)))
         parts += [program.code, text]
+    pattern = term.pattern
+    if pattern is None:
+        parts.append(struct.pack("<B", 0))
+    else:
+        parts.append(
+            struct.pack("<BQQ", 1, len(pattern.pointers), len(pattern.columns))
+        )
+        parts += [pattern.pointers.tobytes(), pattern.columns.tobytes()]
     return b"".join(parts)
 
 
-def decode_lowered(data: bytes) -> LoweredPrograms:
-    """Returns lowered programs from bytes, raising a `ValueError` if they are malformed."""
+def decode_lowered(data: bytes) -> LoweredTerm:
+    """Returns a lowered term from bytes, raising a `ValueError` if they are malformed."""
     if not data.startswith(LOWERED_MAGIC):
         raise ValueError("Not a file of lowered programs")
     offset = len(LOWERED_MAGIC)
     programs: list[LoweredProgram | None] = []
+    pattern = None
     try:
         for _ in LoweredPrograms._fields:
             (is_present,) = struct.unpack_from("<B", data, offset)
@@ -196,15 +207,26 @@ def decode_lowered(data: bytes) -> LoweredPrograms:
             text = data[offset + code_size : offset + code_size + text_size].decode()
             offset += code_size + text_size
             programs.append(LoweredProgram(code, text))
-    except (struct.error, UnicodeDecodeError) as error:
+        (has_pattern,) = struct.unpack_from("<B", data, offset)
+        offset += 1
+        if has_pattern:
+            count, nnz = struct.unpack_from("<QQ", data, offset)
+            offset += 16
+            size = np.dtype(np.intc).itemsize
+            pointers = np.frombuffer(data, np.intc, count, offset)
+            offset += count * size
+            columns = np.frombuffer(data, np.intc, nnz, offset)
+            offset += nnz * size
+            pattern = BlockPattern(pointers.copy(), columns.copy())
+    except (struct.error, UnicodeDecodeError, ValueError) as error:
         raise ValueError(f"Malformed file of lowered programs: {error}") from error
     if offset != len(data):
         raise ValueError("Malformed file of lowered programs: trailing bytes")
-    return LoweredPrograms._make(programs)
+    return LoweredTerm(LoweredPrograms._make(programs), pattern)
 
 
-def load_lowered(key: str) -> LoweredPrograms | None:
-    """Returns the lowered programs stored under a key, or `None` if there are none.
+def load_lowered(key: str) -> LoweredTerm | None:
+    """Returns the lowered term stored under a key, or `None` if there is none.
 
     A malformed file is removed.
     """
@@ -218,9 +240,9 @@ def load_lowered(key: str) -> LoweredPrograms | None:
         return None
 
 
-def store_lowered(key: str, programs: LoweredPrograms) -> None:
-    """Stores lowered programs under a key."""
-    write_atomically(cache_directory() / f"{key}.lowered", encode_lowered(programs))
+def store_lowered(key: str, term: LoweredTerm) -> None:
+    """Stores a lowered term under a key."""
+    write_atomically(cache_directory() / f"{key}.lowered", encode_lowered(term))
 
 
 def executable_key(program: LoweredProgram) -> str:

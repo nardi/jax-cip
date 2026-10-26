@@ -75,8 +75,8 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 # Names from `cython.cimports` are declared in `.pxd` files that ruff does not read.
-"src/jaxcip/{_handler,_problem,_runtime}.py" = ["F821"]
+"src/jaxcip/{_block,_handler,_problem,_runtime}.py" = ["F821"]
 
 [tool.ty.src]
 # The Cython modules are checked through their `.pyi` stubs.
-exclude = ["src/jaxcip/_handler.py", "src/jaxcip/_problem.py", "src/jaxcip/_runtime.py"]
+exclude = ["src/jaxcip/_block.py", "src/jaxcip/_handler.py", "src/jaxcip/_problem.py", "src/jaxcip/_runtime.py"]

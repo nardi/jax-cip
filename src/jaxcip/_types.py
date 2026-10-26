@@ -7,6 +7,7 @@ import numpy as np
 from jaxtyping import Float, Int
 
 if TYPE_CHECKING:
+    from jaxcip._block import BlockStateRef
     from jaxcip._handler import FunctionHandle
     from jaxcip._runtime import Executable
 
@@ -231,4 +232,13 @@ class JaxTerm(NamedTuple):
     """Parameter values of this term, as many as the handle takes."""
     inputs: Int[np.ndarray, " n"]
     """Indices of the term's input variables, as `np.intc`."""
+    coefficient: float
+
+
+class BlockTerm(NamedTuple):
+    """One term `coefficient · f(x, params)[entry]` of a constraint, an entry of a block."""
+
+    block: "BlockStateRef"
+    """The state of the block in the SCIP instance, shared by all its entries."""
+    entry: int
     coefficient: float

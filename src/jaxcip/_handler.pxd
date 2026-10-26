@@ -1,5 +1,5 @@
 from jaxcip._runtime cimport Input, MAX_INPUTS, ProgramSpec
-from jaxcip._scip cimport SCIP, SCIP_EXPR, SCIP_RETCODE
+from jaxcip._scip cimport SCIP, SCIP_EXPR, SCIP_INTERVAL, SCIP_RETCODE
 
 
 cdef enum:
@@ -124,6 +124,10 @@ cdef void free_expr_data(ExprData* data) noexcept nogil
 cdef SCIP_RETCODE include_handler(SCIP* scip) noexcept nogil
 cdef SCIP_RETCODE create_expression(SCIP* scip, SCIP_EXPR** expr, ExprData* data, SCIP_EXPR** children) noexcept nogil
 cdef Switches switches_from(object options)
+cdef bint same(double* first, double* second, int count) noexcept nogil
+cdef bint all_finite(double* values, int count) noexcept nogil
+cdef void set_interval(SCIP_INTERVAL* interval, double low, double high) noexcept nogil
+cdef bint tighten_from_plane(double constant, double* weights, double rhs, int n, double tolerance, SCIP_INTERVAL* childrenbounds) noexcept nogil
 
 
 cdef class FunctionHandle:

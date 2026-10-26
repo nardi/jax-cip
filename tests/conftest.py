@@ -11,6 +11,7 @@ import pytest
 
 import jaxcip as jcp
 from jaxcip._cache import compile_program
+from jaxcip._compile import CompiledTerm
 from jaxcip._handler import FunctionHandle
 from jaxcip._programs import OPTIONAL_PROGRAMS, lower, program_functions, program_shapes
 from jaxcip._types import Program, Programs
@@ -135,3 +136,9 @@ def build_handle(
         )
         executables.append(compile_program(lowered, disk_cache=True)[0])
     return FunctionHandle(num_inputs, num_params, Programs._make(executables))
+
+
+def scalar_handle(term: CompiledTerm) -> FunctionHandle:
+    """Returns the handle of a term that has scalar programs, which is every term but a block."""
+    assert isinstance(term.handle, FunctionHandle)
+    return term.handle

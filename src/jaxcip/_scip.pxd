@@ -33,6 +33,7 @@ cdef extern from "scip/scip.h" nogil:
     ctypedef struct SCIP_EXPRHDLR
     ctypedef struct SCIP_EXPRDATA
     ctypedef struct SCIP_EXPRHDLRDATA
+    ctypedef struct SCIP_HASHMAP
 
     ctypedef struct SCIP_INTERVAL:
         SCIP_Real inf
@@ -60,6 +61,7 @@ cdef extern from "scip/scip.h" nogil:
 # SCIP defines the callback types through macros, so Cython declares them itself with the same
 # signatures.
 ctypedef SCIP_RETCODE (*ExprCopyHdlr)(SCIP* scip, SCIP_EXPRHDLR* sourceexprhdlr) noexcept nogil
+ctypedef SCIP_RETCODE (*ExprFreeHdlr)(SCIP* scip, SCIP_EXPRHDLR* exprhdlr, SCIP_EXPRHDLRDATA** exprhdlrdata) noexcept nogil
 ctypedef SCIP_RETCODE (*ExprCopyData)(SCIP* targetscip, SCIP_EXPRHDLR* targetexprhdlr, SCIP_EXPRDATA** targetexprdata, SCIP* sourcescip, SCIP_EXPR* sourceexpr) noexcept nogil
 ctypedef SCIP_RETCODE (*ExprFreeData)(SCIP* scip, SCIP_EXPR* expr) noexcept nogil
 ctypedef int (*ExprCompare)(SCIP* scip, SCIP_EXPR* expr1, SCIP_EXPR* expr2) noexcept nogil
@@ -81,7 +83,8 @@ cdef extern from "scip/scip.h" nogil:
     # Expression handlers.
     SCIP_RETCODE SCIPincludeExprhdlr(SCIP* scip, SCIP_EXPRHDLR** exprhdlr, const char* name, const char* desc, unsigned int precedence, ExprEval eval, SCIP_EXPRHDLRDATA* data)
     SCIP_EXPRHDLR* SCIPfindExprhdlr(SCIP* scip, const char* name)
-    void SCIPexprhdlrSetCopyFreeHdlr(SCIP_EXPRHDLR* exprhdlr, ExprCopyHdlr copyhdlr, void* freehdlr)
+    void SCIPexprhdlrSetCopyFreeHdlr(SCIP_EXPRHDLR* exprhdlr, ExprCopyHdlr copyhdlr, ExprFreeHdlr freehdlr)
+    SCIP_EXPRHDLRDATA* SCIPexprhdlrGetData(SCIP_EXPRHDLR* exprhdlr)
     void SCIPexprhdlrSetCopyFreeData(SCIP_EXPRHDLR* exprhdlr, ExprCopyData copydata, ExprFreeData freedata)
     void SCIPexprhdlrSetCompare(SCIP_EXPRHDLR* exprhdlr, ExprCompare compare)
     void SCIPexprhdlrSetHash(SCIP_EXPRHDLR* exprhdlr, ExprHash hash)
@@ -119,6 +122,7 @@ cdef extern from "scip/scip.h" nogil:
     SCIP_RETCODE SCIPcallExprInteval(SCIP* scip, SCIP_EXPR* expr, SCIP_INTERVAL* interval, ExprIntevalVar intevalvar, void* intevalvardata)
 
     # Problem creation.
+    SCIP_RETCODE SCIPcopy(SCIP* sourcescip, SCIP* targetscip, SCIP_HASHMAP* varmap, SCIP_HASHMAP* consmap, const char* suffix, SCIP_Bool is_global, SCIP_Bool enablepricing, SCIP_Bool threadsafe, SCIP_Bool passmessagehdlr, SCIP_Bool* valid)
     SCIP_RETCODE SCIPcreate(SCIP** scip)
     SCIP_RETCODE SCIPfree(SCIP** scip)
     SCIP_RETCODE SCIPcreateProbBasic(SCIP* scip, const char* name)

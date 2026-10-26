@@ -15,6 +15,12 @@ from cython.cimports.jaxcip._blas import (
     lbt_forward,
     openblas_set_num_threads,
 )
+from cython.cimports.jaxcip._block import (
+    BlockFunction,
+    BlockStateRef,
+    create_block_expression,
+    include_block_handler,
+)
 from cython.cimports.jaxcip._handler import (
     ExprData,
     FunctionHandle,
@@ -41,6 +47,7 @@ from cython.cimports.jaxcip._scip import (
     SCIPaddOrigObjoffset,
     SCIPaddVar,
     SCIPcheckSolOrig,
+    SCIPcopy,
     SCIPcreate,
     SCIPcreateConsBasicLinear,
     SCIPcreateConsBasicNonlinear,
@@ -105,6 +112,7 @@ from cython.cimports.libc.stdlib import free, malloc
 
 from jaxcip._options import HandlerOptions
 from jaxcip._types import (
+    BlockTerm,
     Domain,
     Emphasis,
     JaxTerm,
@@ -192,6 +200,7 @@ class Scip:
         check(SCIPcreate(cython.address(self.scip)), "create an instance")
         check(SCIPincludeDefaultPlugins(self.scip), "include the default plugins")
         check(include_handler(self.scip), "include the JAX expression handler")
+        check(include_block_handler(self.scip), "include the block expression handler")
         check(SCIPcreateProbBasic(self.scip, name.encode()), "create a problem")
 
     def __dealloc__(self) -> None:
@@ -401,6 +410,51 @@ class Scip:
         self.handles.append(handle)
         return expr
 
+    @cython.cfunc
+    def block_expression(self, term: BlockTerm) -> cython.pointer[SCIP_EXPR]:
+        """Returns a new expression of an entry of a block over the variable expressions of its children."""
+        reference: BlockStateRef = term.block
+        function: cython.pointer[BlockFunction] = reference.handle.function
+        entry: cython.int = term.entry
+        if entry < 0 or entry >= function.rows:
+            raise IndexError(f"The block has {function.rows} entries, not {entry + 1}")
+        inputs: cython.int[::1] = reference.inputs
+        start: cython.int = function.pointers[entry]
+        count: cython.int = function.pointers[entry + 1] - start
+        children: cython.pointer[cython.pointer[SCIP_EXPR]] = cython.cast(
+            cython.pointer[cython.pointer[SCIP_EXPR]],
+            malloc(count * cython.sizeof(cython.pointer[SCIP_EXPR])),
+        )
+        created: cython.int = 0
+        expr: cython.pointer[SCIP_EXPR] = cython.NULL
+        index: cython.int
+        try:
+            for index in range(count):
+                check(
+                    SCIPcreateExprVar(
+                        self.scip,
+                        cython.address(children[index]),
+                        self.variable(inputs[function.columns[start + index]]),
+                        cython.NULL,
+                        cython.NULL,
+                    ),
+                    "create a variable expression",
+                )
+                created += 1
+            check(
+                create_block_expression(
+                    self.scip, cython.address(expr), reference.state, entry, children
+                ),
+                "create a block expression",
+            )
+        finally:
+            # The expression captures its children, so the variable expressions are released.
+            for index in range(created):
+                SCIPreleaseExpr(self.scip, cython.address(children[index]))
+            free(children)
+        self.handles.append(reference.handle)
+        return expr
+
     def add_jax_constraint(
         self,
         terms: list,
@@ -434,9 +488,14 @@ class Scip:
         index: cython.int
         try:
             for index in range(num_terms):
-                term: JaxTerm = terms[index]
-                children[created] = self.jax_expression(term, options)
-                coefficients[created] = term.coefficient
+                if isinstance(terms[index], BlockTerm):
+                    block_term: BlockTerm = terms[index]
+                    children[created] = self.block_expression(block_term)
+                    coefficients[created] = block_term.coefficient
+                else:
+                    term: JaxTerm = terms[index]
+                    children[created] = self.jax_expression(term, options)
+                    coefficients[created] = term.coefficient
                 created += 1
             for index in range(num_linear):
                 check(
@@ -655,9 +714,45 @@ class Scip:
             SCIPfreeSol(self.scip, cython.address(sol))
         return bool(feasible)
 
+    def solve_copy(self) -> tuple[float, int]:
+        """Copies the problem with `SCIPcopy`, solves the copy and returns its primal bound and nodes.
+
+        SCIP copies the expressions into the new instance, which has to give the copy states of
+        its own. Heuristics solve copies like this one while the original is solving.
+        """
+        target: cython.pointer[SCIP] = cython.NULL
+        valid: SCIP_Bool = False
+        bound: cython.double
+        nodes: SCIP_Longint
+        try:
+            check(SCIPcreate(cython.address(target)), "create an instance")
+            check(
+                SCIPcopy(
+                    self.scip,
+                    target,
+                    cython.NULL,
+                    cython.NULL,
+                    b"copy",
+                    True,
+                    False,
+                    False,
+                    False,
+                    cython.address(valid),
+                ),
+                "copy the problem",
+            )
+            check(SCIPsetIntParam(target, b"display/verblevel", 0), "silence the copy")
+            check(SCIPsolve(target), "solve the copy")
+            bound = SCIPgetPrimalbound(target)
+            nodes = SCIPgetNTotalNodes(target)
+        finally:
+            if target != cython.NULL:
+                SCIPfree(cython.address(target))
+        return bound, nodes
+
     def hessian_direction(
         self,
-        term: JaxTerm,
+        term: JaxTerm | BlockTerm,
         options: HandlerOptions,
         x: cython.double[::1],
         direction: cython.double[::1],
@@ -670,7 +765,11 @@ class Scip:
         `SCIPevalExprHessianDir`, the only caller of the handler's `BWFWDIFF` callback. Its
         own plugins do not use it, so this serves plugins that do and tests.
         """
-        expr: cython.pointer[SCIP_EXPR] = self.jax_expression(term, options)
+        expr: cython.pointer[SCIP_EXPR]
+        if isinstance(term, BlockTerm):
+            expr = self.block_expression(term)
+        else:
+            expr = self.jax_expression(term, options)
         point: cython.pointer[SCIP_SOL] = cython.NULL
         along: cython.pointer[SCIP_SOL] = cython.NULL
         index: cython.int

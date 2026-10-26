@@ -1,6 +1,7 @@
 python.install_sources(
   '__init__.py',
   '_analysis.py',
+  '_blocks.py',
   '_cache.py',
   '_compile.py',
   '_options.py',
@@ -11,6 +12,7 @@ python.install_sources(
   '_scip_parameters.py',
   '_solve.py',
   '_types.py',
+  '_block.pyi',
   '_handler.pyi',
   '_problem.pyi',
   '_runtime.pyi',
@@ -30,11 +32,11 @@ endif
 # The C declarations every module can `cimport`. They are listed as dependencies of each
 # `cython` step, because its depfile would record paths relative to the project root
 # rather than the build directory.
-declaration_files = files('_blas.pxd', '_handler.pxd', '_pjrt.pxd', '_runtime.pxd', '_scip.pxd')
+declaration_files = files('_blas.pxd', '_block.pxd', '_handler.pxd', '_pjrt.pxd', '_runtime.pxd', '_scip.pxd')
 
 # Meson compiles Cython from `.pyx` sources only, so the pure Python mode modules are
 # translated to C by an explicit `cython` step.
-foreach module : ['_runtime', '_handler', '_problem']
+foreach module : ['_runtime', '_handler', '_block', '_problem']
   module_c = custom_target(
     module + '.c',
     input: module + '.py',

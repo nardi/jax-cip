@@ -316,7 +316,6 @@ def run(
 
 
 @cython.cfunc
-@cython.inline
 @cython.nogil
 @cython.exceptval(check=False)
 def same(

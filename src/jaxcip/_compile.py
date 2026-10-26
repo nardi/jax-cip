@@ -23,6 +23,8 @@ from jaxtyping import Array, Float, Int, PyTree
 
 from jaxcip import _cache
 from jaxcip._analysis import Analysis, Origin, Term, analyse, evaluate_term
+from jaxcip._block import BlockHandle
+from jaxcip._blocks import BlockPattern, LoweredTerm, lower_block_programs
 from jaxcip._handler import FunctionHandle
 from jaxcip._options import CompileOptions
 from jaxcip._problem_types import (
@@ -48,7 +50,7 @@ The executables of a term hold about 200 memory mappings of machine code, and Li
 would reach that limit if it kept every term, so the cache keeps at most a fifth of it.
 """
 
-compiled_terms: OrderedDict[str, FunctionHandle] = OrderedDict()
+compiled_terms: OrderedDict[str, FunctionHandle | BlockHandle] = OrderedDict()
 """Handles of the terms compiled in this process, by `_cache.term_key`, oldest first."""
 
 
@@ -115,7 +117,7 @@ class CompiledTerm(NamedTuple):
 
     term: Term
     signature: TermSignature
-    handle: FunctionHandle
+    handle: FunctionHandle | BlockHandle
 
 
 class RequestedTerm(NamedTuple):
@@ -132,6 +134,8 @@ class BuiltPrograms(NamedTuple):
 
     executables: tuple[Executable | None, ...]
     statistics: _cache.BuildStatistics
+    pattern: BlockPattern | None = None
+    """For a block term, which variables each entry reads."""
 
 
 class InlineExecutor(Executor):
@@ -175,7 +179,7 @@ class HandleBuilder:
             self.lowering = self.compiling = InlineExecutor()
         self.builds: dict[str, Future[BuiltPrograms]] = {}
         """Builds that were started, by term key."""
-        self.handles: dict[str, FunctionHandle] = {}
+        self.handles: dict[str, FunctionHandle | BlockHandle] = {}
         """Handles that are ready, by term key."""
 
     def __enter__(self) -> Self:
@@ -209,7 +213,7 @@ class HandleBuilder:
 
     def resolve(
         self, requested: RequestedTerm
-    ) -> tuple[FunctionHandle, _cache.BuildStatistics]:
+    ) -> tuple[FunctionHandle | BlockHandle, _cache.BuildStatistics]:
         """Waits for the programs of a requested term and returns its handle.
 
         Only the first call for a key returns the cost of the build. Later calls return a
@@ -220,19 +224,30 @@ class HandleBuilder:
             return handle, _cache.BuildStatistics(reused=1)
         built = self.builds[requested.key].result()
         signature = requested.signature
-        handle = FunctionHandle(
-            signature.num_inputs,
-            signature.num_params,
-            Programs._make(built.executables),
-            signature.state_size,
-            signature.enclosure_size,
-        )
-        self.handles[requested.key] = handle
-        compiled_terms[requested.key] = handle
+        programs = Programs._make(built.executables)
+        created: FunctionHandle | BlockHandle
+        if built.pattern is None:
+            created = FunctionHandle(
+                signature.num_inputs,
+                signature.num_params,
+                programs,
+                signature.state_size,
+                signature.enclosure_size,
+            )
+        else:
+            created = BlockHandle(
+                signature.num_inputs,
+                signature.num_params,
+                built.pattern.pointers,
+                built.pattern.columns,
+                programs,
+            )
+        self.handles[requested.key] = created
+        compiled_terms[requested.key] = created
         # Problems that still use an evicted handle keep it alive themselves.
         while len(compiled_terms) > COMPILED_TERMS_LIMIT:
             compiled_terms.popitem(last=False)
-        return handle, built.statistics
+        return created, built.statistics
 
     def build_programs(
         self, key: str, term: Term, signature: TermSignature
@@ -243,7 +258,11 @@ class HandleBuilder:
         start = time.perf_counter()
         lowered = _cache.load_lowered(key) if disk_cache else None
         if lowered is None:
-            lowered, skipped = lower_programs(term, signature, self.programs)
+            if signature.num_entries > 1:
+                lowered, skipped = lower_block_programs(term, signature, self.programs)
+            else:
+                programs, skipped = lower_programs(term, signature, self.programs)
+                lowered = LoweredTerm(programs, None)
             statistics = statistics.add(
                 _cache.BuildStatistics(
                     lower_seconds=time.perf_counter() - start,
@@ -261,7 +280,7 @@ class HandleBuilder:
             None
             if program is None
             else self.compiling.submit(_cache.compile_program, program, disk_cache)
-            for program in lowered
+            for program in lowered.programs
         ]
         executables: list[Executable | None] = []
         for compiled in compiles:
@@ -271,7 +290,7 @@ class HandleBuilder:
             executable, built = compiled.result()
             statistics = statistics.add(built)
             executables.append(executable)
-        return BuiltPrograms(tuple(executables), statistics)
+        return BuiltPrograms(tuple(executables), statistics, lowered.pattern)
 
 
 class Block(NamedTuple):
@@ -592,18 +611,18 @@ def sparse_affine_function(
     return evaluate
 
 
-def term_rows(
+def input_parts(
     compiled: CompiledTerm,
     block: Block,
     variables: VariableLayout,
     param_leaves: Sequence[np.ndarray],
-) -> tuple[Int[np.ndarray, "rows n"], Float[np.ndarray, "rows m"]]:
-    """Returns the input indices and the parameter values of a term in every row of a block.
+    rows: int,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Returns the variable indices and the parameter values of a term, with a row axis.
 
     A term of `rows` reads its own variables in every row and takes the row's slice of the
     inputs that have a row axis. Other terms read the same inputs in every row.
     """
-    rows = block.rows
     index_parts: list[np.ndarray] = []
     param_parts: list[np.ndarray] = []
     term = compiled.term
@@ -638,14 +657,42 @@ def term_rows(
             else param_parts
         )
         parts.append(part)
-    if compiled.signature.num_entries > 1:
-        param_parts.append(np.arange(rows, dtype=np.float64)[:, None])
+    return index_parts, param_parts
+
+
+def term_rows(
+    compiled: CompiledTerm,
+    block: Block,
+    variables: VariableLayout,
+    param_leaves: Sequence[np.ndarray],
+) -> tuple[Int[np.ndarray, "rows n"], Float[np.ndarray, "rows m"]]:
+    """Returns the input indices and the parameter values of a term in every row of a block."""
+    rows = block.rows
+    index_parts, param_parts = input_parts(
+        compiled, block, variables, param_leaves, rows
+    )
     params = np.concatenate(param_parts, axis=1) if param_parts else np.zeros((rows, 0))
     if params.shape[1] < compiled.signature.num_params:
         params = np.pad(
             params, ((0, 0), (0, compiled.signature.num_params - params.shape[1]))
         )
     inputs = np.concatenate(index_parts, axis=1)
+    return np.ascontiguousarray(inputs, np.intc), np.ascontiguousarray(
+        params, np.float64
+    )
+
+
+def block_inputs(
+    compiled: CompiledTerm,
+    block: Block,
+    variables: VariableLayout,
+    param_leaves: Sequence[np.ndarray],
+) -> tuple[Int[np.ndarray, " n"], Float[np.ndarray, " m"]]:
+    """Returns the variables and the parameter values of a block term, which all entries share."""
+    index_parts, param_parts = input_parts(compiled, block, variables, param_leaves, 1)
+    params = np.concatenate(param_parts, axis=1)[0] if param_parts else np.zeros(0)
+    params = np.pad(params, (0, compiled.signature.num_params - params.shape[0]))
+    inputs = np.concatenate(index_parts, axis=1)[0]
     return np.ascontiguousarray(inputs, np.intc), np.ascontiguousarray(
         params, np.float64
     )

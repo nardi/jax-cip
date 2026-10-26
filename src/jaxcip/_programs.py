@@ -91,7 +91,10 @@ class TermSignature(NamedTuple):
 
     inputs: tuple[TermInput, ...]
     shape: tuple[int, ...]
-    """Shape of the term's value. Each entry becomes one SCIP expression."""
+    """Shape of the term's value. Each entry becomes one SCIP expression.
+
+    The programs of a term with several entries are those of a block, which evaluate all
+    entries at once. Other terms have scalar programs."""
     num_inputs: int
     """Length of the flat variable vector."""
     num_params: int
@@ -119,10 +122,9 @@ def term_signature(term: Term, shape: tuple[int, ...]) -> TermSignature:
     )
     num_inputs = sum(item.size for item in inputs if item.is_variable)
     num_params = sum(item.size for item in inputs if not item.is_variable)
-    num_params += int(math.prod(shape) > 1)
-    signature = TermSignature(
-        inputs, shape, num_inputs, max(num_params, 1), state_size(term.jaxpr)
-    )
+    # A block does not take warm starts, which would need one for each entry.
+    roots = state_size(term.jaxpr) if math.prod(shape) == 1 else 0
+    signature = TermSignature(inputs, shape, num_inputs, max(num_params, 1), roots)
     if signature.state_size:
         signature = signature._replace(enclosure_size=enclosure_size(term, signature))
     return signature
@@ -139,8 +141,8 @@ def enclosure_size(term: Term, signature: TermSignature) -> int:
 
 def term_arguments(
     signature: TermSignature, x: Float[Array, " n"], params: Float[Array, " m"]
-) -> tuple[list[Array], int]:
-    """Returns the arguments of a term's jaxpr from the flat vectors and the parameters used."""
+) -> list[Array]:
+    """Returns the arguments of a term's jaxpr from the flat vectors."""
     arguments: list[Array] = []
     variable_offset = 0
     param_offset = 0
@@ -152,43 +154,28 @@ def term_arguments(
             part = params[param_offset : param_offset + item.size]
             param_offset += item.size
         arguments.append(part.reshape(item.shape).astype(item.dtype))
-    return arguments, param_offset
-
-
-def select_entry(
-    total: Array, signature: TermSignature, params: Float[Array, " m"], offset: int
-) -> Float[Array, ""]:
-    """Returns the entry of a term's value that the parameter at `offset` selects, if any."""
-    if signature.num_entries == 1:
-        return total.reshape(())
-    index = params[offset].astype(jnp.int32)
-    return jax.lax.dynamic_index_in_dim(total, index, keepdims=False)
+    return arguments
 
 
 def term_function(term: Term, signature: TermSignature) -> TermFunction:
-    """Returns the scalar function of one entry of a term.
-
-    If the term has several entries, the last parameter selects the entry.
-    """
+    """Returns the scalar function of a term with one entry."""
 
     def evaluate(x: Float[Array, " n"], params: Float[Array, " m"]) -> Float[Array, ""]:
-        arguments, offset = term_arguments(signature, x, params)
-        total = sum_outputs(term, signature.shape, arguments).ravel()
-        return select_entry(total, signature, params, offset)
+        arguments = term_arguments(signature, x, params)
+        return sum_outputs(term, signature.shape, arguments).reshape(())
 
     return evaluate
 
 
 def stateful_term_function(term: Term, signature: TermSignature) -> StatefulFunction:
-    """Returns the scalar function of one entry of a term whose roots take a warm start."""
+    """Returns the scalar function of a term with one entry whose roots take a warm start."""
 
     def evaluate(
         x: Float[Array, " n"], params: Float[Array, " m"], state: Float[Array, " k"]
     ) -> tuple[Float[Array, ""], Float[Array, " k"]]:
-        arguments, offset = term_arguments(signature, x, params)
+        arguments = term_arguments(signature, x, params)
         outputs, roots = evaluate_with_state(term.jaxpr, arguments, state)
-        total = combine_outputs(term, signature.shape, outputs).ravel()
-        return select_entry(total, signature, params, offset), roots
+        return combine_outputs(term, signature.shape, outputs).reshape(()), roots
 
     return evaluate
 
