@@ -1,6 +1,7 @@
 """Tests of block terms: patterns, compressed programs, and the entries inside SCIP."""
 
 import math
+from collections import OrderedDict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -918,13 +919,13 @@ def test_the_pattern_cache_forgets_the_oldest_pattern(
 ) -> None:
     """Checks that only the newest patterns are kept for the lowering to find."""
     monkeypatch.setattr(_blocks, "PATTERN_CACHE_LIMIT", 1)
+    monkeypatch.setattr(_blocks, "patterns", OrderedDict())
     first, _ = block_of("neighbours")
     second, _ = block_of("elementwise")
-    patterns = _blocks.patterns
-    assert len(patterns) == 1
+    assert len(_blocks.patterns) == 1
     for term in (first, second):
         _blocks.pattern_of(term.term, term.signature)
-    assert len(patterns) == 1
+    assert len(_blocks.patterns) == 1
 
 
 def test_a_function_that_asdex_cannot_analyse_reads_every_variable(

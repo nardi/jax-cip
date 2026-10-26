@@ -37,7 +37,8 @@ compiling again.
   other use of a leaf reads all of it.
 - A cut whose entries all read most of its variables is not separated from the linear
   operation that follows it. Otherwise `jnp.sum` over \(n\) such entries would give SCIP
-  \(n\) expressions with \(n\) children each, where the sum has one.
+  \(n\) expressions with \(n\) children each, where the sum has one. The same holds for a
+  cut with at most 64 entries times inputs, which would only add callbacks.
 
 With `split_sums=False` in [`CompileOptions`][jaxcip.CompileOptions] the output is the
 only cut. Separate cuts give SCIP more auxiliary variables and tighter relaxations, since
