@@ -41,15 +41,13 @@ def hessian_direction(
 
 
 @pytest.mark.parametrize("name", ["product", "six_hump_camel", "newton_sqrt"])
-@pytest.mark.parametrize("eval_gradient", [True, False])
-def test_hessian_direction(name: str, eval_gradient: bool) -> None:
+def test_hessian_direction(name: str) -> None:
     """Checks the Hessian-vector product of the `BWFWDIFF` callback against JAX."""
     function = TEST_FUNCTIONS[name]
     x = np.array([0.7, 1.3])
     direction = np.array([0.4, -1.1])
-    options = jcp.HandlerOptions(eval_gradient=eval_gradient)
     expected = jax.hessian(function)(jnp.asarray(x), jnp.asarray(PARAMS)) @ direction
-    product = hessian_direction(function, x, direction, options)
+    product = hessian_direction(function, x, direction)
     assert product is not None
     np.testing.assert_allclose(product, expected, rtol=1e-10)
 
@@ -72,7 +70,6 @@ def test_hessian_unavailable() -> None:
         assert hessian_direction(function, x, direction, options, handle) is None
 
 
-@pytest.mark.parametrize("eval_gradient", [True, False])
 @pytest.mark.parametrize(
     "function",
     [
@@ -83,12 +80,32 @@ def test_hessian_unavailable() -> None:
     ids=["infinite_value", "infinite_gradient", "infinite_hessian"],
 )
 def test_non_finite_derivatives(
-    function: Callable[[jax.Array, jax.Array], jax.Array], eval_gradient: bool
+    function: Callable[[jax.Array, jax.Array], jax.Array],
 ) -> None:
     """Checks that non-finite values and derivatives give no Hessian."""
-    options = jcp.HandlerOptions(eval_gradient=eval_gradient)
     point, direction = np.array([0.0, 1.0]), np.array([1.0, 1.0])
-    assert hessian_direction(function, point, direction, options) is None
+    assert hessian_direction(function, point, direction) is None
+
+
+def test_value_cache_outlives_gradient_cache() -> None:
+    """Checks that a value is reused after the gradient cache moved on to another point."""
+    handle = build_handle(TEST_FUNCTIONS["product"])
+    scip = box_problem(-2.0, 2.0)
+    scip.add_jax_constraint(
+        [JaxTerm(handle, PARAMS, INPUTS, 1.0)],
+        np.zeros(0, np.intc),
+        np.zeros(0),
+        0.0,
+        -math.inf,
+        10.0,
+        jcp.HandlerOptions(),
+    )
+    handle.reset_statistics()
+    first, second = np.array([1.0, 2.0]), np.array([-1.0, 0.5])
+    for point in (first, second, first):
+        assert scip.check_solution(point)
+    assert handle.statistics().eval.hits == 1
+    assert handle.statistics().eval.runs == 2
 
 
 def test_unbounded_variables() -> None:

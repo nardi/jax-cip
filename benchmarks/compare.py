@@ -3,10 +3,10 @@
 Usage: `python compare.py results.json baseline.json`.
 
 Each time is divided by the time of its reference in the same run, which `extra_info`
-names: the value program of the same function for a program, and a fixed NumPy
-computation for a build or a solve. These ratios are compared, so the comparison holds
-across machines. The script prints a table and exits with status 1 when a ratio grew by
-more than the allowed factor.
+names: the value and gradient program of the same function for a program, and a fixed
+NumPy computation for a build or a solve. These ratios are compared, so the comparison
+holds across machines. The script prints a table and exits with status 1 when a ratio
+grew by more than the allowed factor.
 """
 
 import json
@@ -30,10 +30,13 @@ def ratios(path: Path) -> dict[tuple[str, str], float]:
     references = {
         name: time
         for (kind, name), (time, _) in times.items()
-        if kind == "reference" or name.endswith(".value")
+        if kind == "reference" or name.endswith(".value_and_gradient")
     }
     return {
-        key: time / references[reference if kind != "program" else f"{reference}.value"]
+        key: time
+        / references[
+            reference if kind != "program" else f"{reference}.value_and_gradient"
+        ]
         for key, (time, reference) in times.items()
         for kind in [key[0]]
         if kind != "reference"

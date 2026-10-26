@@ -40,7 +40,7 @@ CACHE_ENVIRONMENT_VARIABLE = "JAXCIP_CACHE_DIR"
 LOCATION_PATTERN = re.compile(r"^#loc.*$|\s*loc\((?:[^()]|\([^()]*\))*\)", re.MULTILINE)
 """Source locations in StableHLO text, which differ between traces of the same function."""
 
-LOWERED_MAGIC = b"JAXCIP-LOWERED-1\n"
+LOWERED_MAGIC = b"JAXCIP-LOWERED-2\n"
 """First bytes of a file of lowered programs."""
 
 

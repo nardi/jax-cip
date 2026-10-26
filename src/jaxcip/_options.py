@@ -22,8 +22,6 @@ class HandlerOptions(NamedTuple):
     """Whether monotonicity is reported from interval bounds of the gradient."""
     global_estimators: bool = True
     """Whether estimators over the global box are marked as globally valid."""
-    eval_gradient: bool = True
-    """Whether evaluating computes the gradient as well, which SCIP usually asks for next."""
     reverse_propagation: bool = True
     """Whether bounds on a function tighten the bounds of its inputs."""
     hessian: bool = True

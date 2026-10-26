@@ -1,9 +1,10 @@
 """Run time of the programs, build time of problems and solve time of small problems.
 
 Absolute times depend on the machine, so every benchmark records a `kind` and a
-`reference` in `extra_info`. `compare.py` divides each time by the time of its reference
-in the same run: a program by the value program of the same function, and a build or a
-solve by a fixed NumPy computation that measures the speed of the machine.
+`reference` in `extra_info`. `compare.py` divides each time by the time of its
+reference in the same run: a program by the value and gradient program of the
+same function, and a build or a solve by a fixed NumPy computation that measures
+the speed of the machine.
 """
 
 from collections.abc import Callable, Iterator

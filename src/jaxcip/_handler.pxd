@@ -22,14 +22,13 @@ cdef enum:
 
 # The programs of a function, with the values of `jaxcip._types.Program`.
 cdef enum:
-    PROGRAM_VALUE = 0
-    PROGRAM_VALUE_AND_GRADIENT = 1
-    PROGRAM_HESSIAN_VECTOR = 2
-    PROGRAM_CONVEX = 3
-    PROGRAM_CONCAVE = 4
-    PROGRAM_INTERVAL = 5
-    PROGRAM_GRADIENT_INTERVAL = 6
-    NUM_PROGRAMS = 7
+    PROGRAM_VALUE_AND_GRADIENT = 0
+    PROGRAM_HESSIAN_VECTOR = 1
+    PROGRAM_CONVEX = 2
+    PROGRAM_CONCAVE = 3
+    PROGRAM_INTERVAL = 4
+    PROGRAM_GRADIENT_INTERVAL = 5
+    NUM_PROGRAMS = 6
 
 
 # The counted callbacks, with the values of `jaxcip._types.Callback`.
@@ -59,7 +58,6 @@ cdef struct Switches:
     bint init_estimates
     bint monotonicity
     bint global_estimators
-    bint eval_gradient
     bint reverse_propagation
     bint hessian
     bint zero_copy

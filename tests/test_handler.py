@@ -127,11 +127,13 @@ def test_time_program_errors(handles: dict[str, FunctionHandle]) -> None:
     handle = handles["product"]
     box = (-np.ones(2), np.ones(2), PARAMS)
     with pytest.raises(ValueError, match="at least one point"):
-        handle.time_program(Program.VALUE, np.zeros((0, 2)), *box)
+        handle.time_program(Program.VALUE_AND_GRADIENT, np.zeros((0, 2)), *box)
     with pytest.raises(ValueError, match="at least one point"):
-        handle.time_program(Program.VALUE, np.zeros((1, 2)), *box, repeat=0)
+        handle.time_program(
+            Program.VALUE_AND_GRADIENT, np.zeros((1, 2)), *box, repeat=0
+        )
     with pytest.raises(ValueError, match="points"):
-        handle.time_program(Program.VALUE, np.zeros((1, 3)), *box)
+        handle.time_program(Program.VALUE_AND_GRADIENT, np.zeros((1, 3)), *box)
     without = build_handle(TEST_FUNCTIONS["product"], optional=False)
     with pytest.raises(ValueError, match="no hessian_vector program"):
         without.time_program(Program.HESSIAN_VECTOR, np.zeros((1, 2)), *box)
@@ -166,10 +168,12 @@ def test_handle_validation(handles: dict[str, FunctionHandle]) -> None:
     with pytest.raises(ValueError, match="at least one input"):
         FunctionHandle(0, 1, programs)
     missing: Any = None
-    with pytest.raises(ValueError, match="value program is required"):
-        FunctionHandle(2, 2, programs._replace(value=missing))
-    swapped = programs._replace(value=programs.value_and_gradient)
-    with pytest.raises(ValueError, match="value program has 2 outputs"):
+    with pytest.raises(ValueError, match="value_and_gradient program is required"):
+        FunctionHandle(2, 2, programs._replace(value_and_gradient=missing))
+    hessian_vector = programs.hessian_vector
+    assert hessian_vector is not None
+    swapped = programs._replace(value_and_gradient=hessian_vector)
+    with pytest.raises(ValueError, match="value_and_gradient program has 1 outputs"):
         FunctionHandle(2, 2, swapped)
 
 

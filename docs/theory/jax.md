@@ -29,16 +29,15 @@ Every entry of a term's output becomes one SCIP expression, whose children are t
 term's variables. The constraint `lower ≤ affine + Σ terms ≤ upper` then becomes one
 SCIP nonlinear constraint per output entry.
 
-## The seven programs
+## The six programs
 
 A term is a scalar function \(f(x, p)\) of two flat vectors, its variables \(x\) and its
 parameters \(p\). JAX-CIP moves the constants that the function closes over into \(p\),
-so two terms that differ only in their numbers have the same code. JAX-CIP builds seven
+so two terms that differ only in their numbers have the same code. JAX-CIP builds six
 programs of \(f\):
 
 | Program | Arguments | Result | Callbacks |
 | --- | --- | --- | --- |
-| value | \(x, p\) | \(f(x, p)\) | `EVAL` |
 | value and gradient | \(x, p\) | \(f\), \(\nabla_x f\) | `EVAL`, `BWDIFF`, `FWDIFF` |
 | Hessian-vector | \(x, d, p\) | \(\nabla_x^2 f \, d\) | `BWFWDIFF` |
 | convex | \(x, \underline{x}, \overline{x}, p\) | convex relaxation and subgradient | `ESTIMATE`, `INITESTIMATES`, `REVERSEPROP` |

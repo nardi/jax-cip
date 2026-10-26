@@ -114,19 +114,17 @@ class Callback(IntEnum):
 class Program(IntEnum):
     """The programs compiled for each function, in the order of `jaxcip._handler.Programs`."""
 
-    VALUE = 0
-    """Maps `(x, params)` to `f(x, params)`."""
-    VALUE_AND_GRADIENT = 1
+    VALUE_AND_GRADIENT = 0
     """Maps `(x, params)` to the value and the gradient in `x`."""
-    HESSIAN_VECTOR = 2
+    HESSIAN_VECTOR = 1
     """Maps `(x, direction, params)` to the Hessian in `x` times `direction`."""
-    CONVEX = 3
+    CONVEX = 2
     """Maps `(x, lower, upper, params)` to a convex relaxation's value and subgradient."""
-    CONCAVE = 4
+    CONCAVE = 3
     """Maps `(x, lower, upper, params)` to a concave relaxation's value and supergradient."""
-    INTERVAL = 5
+    INTERVAL = 4
     """Maps `(lower, upper, params)` to bounds on the value over the box."""
-    GRADIENT_INTERVAL = 6
+    GRADIENT_INTERVAL = 5
     """Maps `(lower, upper, params)` to bounds on the gradient over the box."""
 
 
@@ -217,7 +215,6 @@ class Programs(NamedTuple):
     handler leaves Hessians and monotonicity to SCIP's defaults.
     """
 
-    value: "Executable"
     value_and_gradient: "Executable"
     hessian_vector: "Executable | None"
     convex: "Executable"

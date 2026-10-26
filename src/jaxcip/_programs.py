@@ -1,7 +1,7 @@
 """The programs of a term, from its jaxpr to StableHLO.
 
 A term becomes a scalar function `f(x, params)` of two flat vectors: the entries of the
-variables it reads and its parameters, which include the constants it closes over. Seven
+variables it reads and its parameters, which include the constants it closes over. Six
 programs of `f` give the expression handler values, derivatives, relaxations and bounds.
 """
 
@@ -35,7 +35,6 @@ class LoweredProgram(NamedTuple):
 class LoweredPrograms(NamedTuple):
     """The lowered programs of one term, in the order of `Program`."""
 
-    value: LoweredProgram
     value_and_gradient: LoweredProgram
     hessian_vector: LoweredProgram | None
     convex: LoweredProgram
@@ -132,7 +131,7 @@ def term_function(term: Term, signature: TermSignature) -> TermFunction:
 def program_functions(
     function: TermFunction, options: RelaxationOptions
 ) -> tuple[Callable[..., Any], ...]:
-    """Returns the seven programs of a scalar function in the order of `Program`."""
+    """Returns the six programs of a scalar function in the order of `Program`."""
     mode = options.mode.value
 
     def hessian_vector(
@@ -142,7 +141,6 @@ def program_functions(
         return jax.jvp(lambda y: gradient(y, params), (x,), (direction,))[1]
 
     return (
-        function,
         jax.value_and_grad(function),
         hessian_vector,
         jmk.convex_side(
@@ -169,7 +167,7 @@ def program_shapes(
     vector = jax.ShapeDtypeStruct((num_inputs,), jnp.float64)
     params = jax.ShapeDtypeStruct((num_params,), jnp.float64)
     match program:
-        case Program.VALUE | Program.VALUE_AND_GRADIENT:
+        case Program.VALUE_AND_GRADIENT:
             return (vector, params)
         case Program.HESSIAN_VECTOR:
             return (vector, vector, params)

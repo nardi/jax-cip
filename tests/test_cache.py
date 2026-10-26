@@ -23,7 +23,7 @@ from jaxcip._programs import LoweredProgram, LoweredPrograms, lower
 PROGRAM = LoweredProgram(code=b"\x00code\xff", text="module @x {}")
 """A stand-in for a lowered program, enough for encoding."""
 
-PROGRAMS = LoweredPrograms(PROGRAM, PROGRAM, None, PROGRAM, PROGRAM, PROGRAM, None)
+PROGRAMS = LoweredPrograms(PROGRAM, None, PROGRAM, PROGRAM, PROGRAM, None)
 """Lowered programs with both optional programs left out."""
 
 

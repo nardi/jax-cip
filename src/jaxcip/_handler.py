@@ -2,9 +2,9 @@
 
 Each expression of the `jax` handler stands for one scalar function `f(x, params)` of its
 children `x`, with a constant parameter vector `params` per expression. Expressions with the
-same structure share one `Function`, which holds the executables of seven programs: the value,
-the value with its gradient, a Hessian-vector product, the convex and the concave relaxation
-with their subgradients, interval bounds, and interval bounds of the gradient.
+same structure share one `Function`, which holds the executables of six programs: the value
+with its gradient, a Hessian-vector product, the convex and the concave relaxation with their
+subgradients, interval bounds, and interval bounds of the gradient.
 
 All callbacks run without the GIL. Each expression keeps small caches of recent inputs and
 results, because SCIP often asks for the same value, bounds or estimator again.
@@ -97,7 +97,6 @@ MAX_ESTIMATOR_COEFFICIENT = cython.declare(cython.double, 1e9)
 
 PROGRAM_SLOTS: tuple[tuple[int, ...], ...] = (
     (SLOT_X, SLOT_PARAMS),
-    (SLOT_X, SLOT_PARAMS),
     (SLOT_X, SLOT_DIRECTION, SLOT_PARAMS),
     (SLOT_X, SLOT_LOWER, SLOT_UPPER, SLOT_PARAMS),
     (SLOT_X, SLOT_LOWER, SLOT_UPPER, SLOT_PARAMS),
@@ -110,8 +109,6 @@ PROGRAM_SLOTS: tuple[tuple[int, ...], ...] = (
 def output_sizes(program: Program, num_inputs: int) -> tuple[int, ...]:
     """Returns the number of doubles in each output of a program."""
     match program:
-        case Program.VALUE:
-            return (1,)
         case Program.VALUE_AND_GRADIENT | Program.CONVEX | Program.CONCAVE:
             return (1, num_inputs)
         case Program.HESSIAN_VECTOR:
@@ -131,7 +128,6 @@ def switches_from(options: object) -> Switches:
     switches.init_estimates = handler_options.init_estimates
     switches.monotonicity = handler_options.monotonicity
     switches.global_estimators = handler_options.global_estimators
-    switches.eval_gradient = handler_options.eval_gradient
     switches.reverse_propagation = handler_options.reverse_propagation
     switches.hessian = handler_options.hessian
     switches.zero_copy = handler_options.zero_copy
@@ -314,21 +310,11 @@ def eval_callback(
                 function.statistics.hits[CALLBACK_EVAL] += 1
                 val[0] = data.value_results[index]
                 return SCIP_OKAY
-        if data.gradient_valid and same(x, data.gradient_key, n):
-            function.statistics.hits[CALLBACK_EVAL] += 1
-            val[0] = data.gradient_value
-            return SCIP_OKAY
 
-    # With `eval_gradient`, the value comes with the gradient, which SCIP often asks for next.
-    value: cython.double
-    if data.switches.eval_gradient:
-        if not ensure_gradient(data, CALLBACK_EVAL):
-            return SCIP_OKAY
-        value = data.gradient_value
-    elif run(
-        data, PROGRAM_VALUE, cython.address(value), cython.NULL, CALLBACK_EVAL
-    ) != 0 or not isfinite(value):
+    # The value comes with the gradient, which SCIP often asks for next.
+    if not ensure_gradient(data, CALLBACK_EVAL):
         return SCIP_OKAY
+    value: cython.double = data.gradient_value
     val[0] = value
     if data.switches.caches:
         index = data.value_next
@@ -449,7 +435,9 @@ def fwdiff_callback(
         or not read_child_dots(expr, dots)
         or not ensure_gradient(data, CALLBACK_FWDIFF)
     ):
-        return SCIP_OKAY
+        # SCIP evaluates a point before it differentiates there, and that evaluation
+        # already fails if the gradient is not finite.
+        return SCIP_OKAY  # pragma: no cover
     for index in range(function.n):
         if dots[index] != 0.0:
             total += data.gradient[index] * dots[index]
@@ -1276,11 +1264,8 @@ class FunctionHandle:
         )
 
     def evaluate(self, x: cython.double[::1], params: cython.double[::1]) -> float:
-        """Runs the value program and returns `f(x, params)`."""
-        value: cython.double = 0.0
-        self.set_input(SLOT_X, x)
-        run_direct(self, Program.VALUE, params, cython.address(value), cython.NULL)
-        return value
+        """Runs the gradient program and returns `f(x, params)`."""
+        return self.value_and_gradient(x, params)[0]
 
     def value_and_gradient(
         self, x: cython.double[::1], params: cython.double[::1]
