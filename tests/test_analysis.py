@@ -18,51 +18,43 @@ class Case(NamedTuple):
     """A function of a vector of four variables and two parameters."""
 
     function: Callable[[jax.Array, jax.Array], jax.Array]
-    has_affine: bool
-    """Whether the function has an affine or constant part."""
     num_nonlinear: int
-    """Number of nonlinear terms when sums are split."""
+    """Number of cuts when sums are split."""
 
 
 CASES = {
-    "linear": Case(lambda x, p: 2 * x[0] + x[1] - p[0], True, 0),
-    "constant": Case(lambda x, p: 2 * p[0], True, 0),
-    "sum": Case(lambda x, p: x[0] ** 2 + jnp.sin(x[1]) - x[2], True, 2),
-    "negated": Case(lambda x, p: -(x[0] * x[1]), False, 1),
-    "closed_over": Case(lambda x, p: jnp.dot(WEIGHTS, x) + jnp.exp(x[3]), True, 1),
-    "jit_affine": Case(lambda x, p: jax.jit(lambda y: 2 * y)(x).sum(), True, 0),
-    "jit_nonlinear": Case(lambda x, p: jax.jit(lambda y: y**2)(x).sum(), False, 1),
+    "linear": Case(lambda x, p: 2 * x[0] + x[1] - p[0], 0),
+    "constant": Case(lambda x, p: 2 * p[0], 0),
+    "sum": Case(lambda x, p: x[0] ** 2 + jnp.sin(x[1]) - x[2], 2),
+    "negated": Case(lambda x, p: -(x[0] * x[1]), 1),
+    "closed_over": Case(lambda x, p: jnp.dot(WEIGHTS, x) + jnp.exp(x[3]), 1),
+    "jit_affine": Case(lambda x, p: jax.jit(lambda y: 2 * y)(x).sum(), 0),
+    "jit_nonlinear": Case(lambda x, p: jax.jit(lambda y: y**2)(x).sum(), 1),
     "loop": Case(
         lambda x, p: jax.lax.fori_loop(0, 3, lambda _, guess: guess * x[0], 1.0) + x[1],
-        True,
         1,
     ),
-    "checkpoint": Case(
-        lambda x, p: jax.checkpoint(lambda y: y * p[0])(x).sum(), True, 0
-    ),
-    "to_float32": Case(lambda x, p: x[0].astype(jnp.float32) * 1.0, True, 0),
-    "to_integer": Case(lambda x, p: x[0].astype(jnp.int32) * 1.0, False, 1),
-    "stack": Case(
-        lambda x, p: jnp.stack([x[0], p[0], x[3]])[jnp.array([2])].sum(), True, 0
-    ),
-    "gather": Case(lambda x, p: x[jnp.array([0, 2])].sum(), True, 0),
+    "checkpoint": Case(lambda x, p: jax.checkpoint(lambda y: y * p[0])(x).sum(), 0),
+    "to_float32": Case(lambda x, p: x[0].astype(jnp.float32) * 1.0, 0),
+    "to_integer": Case(lambda x, p: x[0].astype(jnp.int32) * 1.0, 1),
+    "stack": Case(lambda x, p: jnp.stack([x[0], p[0], x[3]])[jnp.array([2])].sum(), 0),
+    "gather": Case(lambda x, p: x[jnp.array([0, 2])].sum(), 0),
     "variable_index": Case(
         lambda x, p: jax.lax.dynamic_index_in_dim(
             x, jnp.clip(x[0], 0, 3).astype(jnp.int32), keepdims=False
         ),
-        False,
         1,
     ),
     "update_slice": Case(
-        lambda x, p: jax.lax.dynamic_update_slice(x, p[:1], (1,)).sum(), True, 0
+        lambda x, p: jax.lax.dynamic_update_slice(x, p[:1], (1,)).sum(), 0
     ),
-    "scatter_add": Case(lambda x, p: x.at[jnp.array([1])].add(p[:1]).sum(), True, 0),
-    "constant_select": Case(lambda x, p: jnp.where(p[0] > 0, x[0], x[1]), True, 0),
-    "variable_select": Case(lambda x, p: jnp.where(x[0] > 0, x[0], x[1]), False, 1),
-    "divide_by_constant": Case(lambda x, p: x[0] / p[1], True, 0),
-    "divide_by_variable": Case(lambda x, p: p[1] / x[0], False, 1),
-    "vector": Case(lambda x, p: x * p[0] + x**2, True, 1),
-    "identity": Case(lambda x, p: x, True, 0),
+    "scatter_add": Case(lambda x, p: x.at[jnp.array([1])].add(p[:1]).sum(), 0),
+    "constant_select": Case(lambda x, p: jnp.where(p[0] > 0, x[0], x[1]), 0),
+    "variable_select": Case(lambda x, p: jnp.where(x[0] > 0, x[0], x[1]), 1),
+    "divide_by_constant": Case(lambda x, p: x[0] / p[1], 0),
+    "divide_by_variable": Case(lambda x, p: p[1] / x[0], 1),
+    "vector": Case(lambda x, p: x * p[0] + x**2, 1),
+    "identity": Case(lambda x, p: x, 0),
 }
 """Functions with the expected outcome of the analysis."""
 
@@ -76,7 +68,6 @@ def test_terms_sum_to_the_function(name: str, split_sums: bool) -> None:
     """Checks the classification of each case and that its terms sum to the function."""
     case = CASES[name]
     analysis = analyse(case.function, VARIABLES, PARAMETERS, split_sums)
-    assert (analysis.affine is not None) == case.has_affine
     if analysis.affine is not None:
         assert analysis.affine.linearity <= Linearity.AFFINE
     expected_count = case.num_nonlinear if split_sums else min(case.num_nonlinear, 1)
@@ -85,12 +76,17 @@ def test_terms_sum_to_the_function(name: str, split_sums: bool) -> None:
     rng = np.random.default_rng(len(name))
     for _ in range(3):
         x, params = rng.uniform(-2, 2, 4), rng.uniform(0.5, 2, 2)
-        terms = [analysis.affine, *analysis.nonlinear]
-        total = sum(
-            evaluate_term(term, analysis.shape, analysis.constants, [x], [params])
-            for term in terms
-            if term is not None
-        )
+        cuts = [
+            evaluate_term(term, shape, analysis.constants, [x], [params])
+            for term, shape in zip(analysis.nonlinear, analysis.cut_shapes, strict=True)
+        ]
+        if analysis.affine is None:
+            assert len(cuts) == 1
+            total = cuts[0]
+        else:
+            total = evaluate_term(
+                analysis.affine, analysis.shape, analysis.constants, [x], [params], cuts
+            )
         expected = case.function(jnp.asarray(x), jnp.asarray(params))
         np.testing.assert_allclose(total, expected, rtol=1e-6)
 
@@ -170,7 +166,7 @@ def test_chained_slices_select_entries() -> None:
 
     def function(x: jax.Array, p: jax.Array) -> jax.Array:
         rest = p[1:]
-        return x[0] * x[1] * rest[0] + x[2] * x[3] * rest[1:][1]
+        return jnp.sin(x[0] * rest[0]) * x[1] + jnp.sin(x[2] * rest[1:][1]) * x[3]
 
     variables = (jax.ShapeDtypeStruct((4,), jnp.float64),)
     parameters = (jax.ShapeDtypeStruct((4,), jnp.float64),)
@@ -181,10 +177,12 @@ def test_chained_slices_select_entries() -> None:
     assert str(first.jaxpr) == str(second.jaxpr)
     x = np.random.default_rng(0).uniform(-2, 2, 4)
     params = np.array([5.0, 2.0, 7.0, 3.0])
-    value = sum(
-        evaluate_term(term, analysis.shape, analysis.constants, [x], [params])
+    cuts = [
+        evaluate_term(term, (), analysis.constants, [x], [params])
         for term in analysis.nonlinear
-    )
+    ]
+    assert analysis.affine is not None
+    value = evaluate_term(analysis.affine, (), analysis.constants, [x], [params], cuts)
     np.testing.assert_allclose(value, function(jnp.asarray(x), jnp.asarray(params)))
 
 

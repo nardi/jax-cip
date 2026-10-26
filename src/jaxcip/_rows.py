@@ -13,8 +13,6 @@ description. The description lives for as long as the analysis of the function t
 `rows`.
 """
 
-import functools
-import operator
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -114,20 +112,20 @@ def rows(
             from jaxcip._analysis import split_rows
 
             split.append(split_rows(function, structure, table.shape[1], row_avals))
-        results = []
-        if split[0].affine is not None:
-            results.append(jax.vmap(split[0].affine)(vector[table], *arrays))
-        for piece in split[0].pieces:
-            results.append(
-                mark(
-                    vector,
-                    RowsDescription(
-                        piece.function, table[:, piece.columns], piece.structure
-                    ),
-                    [arrays[index] for index in piece.leaves],
-                )
+        cuts = [
+            mark(
+                vector,
+                RowsDescription(
+                    piece.function, table[:, piece.columns], piece.structure
+                ),
+                [arrays[index] for index in piece.leaves],
             )
-        return functools.reduce(operator.add, results)
+            for piece in split[0].pieces
+        ]
+        combine = split[0].combine
+        if combine is None:
+            return cuts[0]
+        return jax.vmap(combine)(vector[table], tuple(cuts), tuple(arrays))
 
     return apply
 

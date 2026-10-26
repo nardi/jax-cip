@@ -12,6 +12,7 @@ to its children, which are the variables `columns[pointers[e]:pointers[e + 1]]` 
 
 import threading
 import warnings
+from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from typing import Any, Literal, NamedTuple
 
@@ -33,6 +34,7 @@ from jaxcip._programs import (
     is_wanted,
     lower,
     term_arguments,
+    term_signature,
 )
 from jaxcip._types import Program
 
@@ -43,6 +45,17 @@ BlockFunction = Callable[
 
 detection_lock = threading.Lock()
 """Serializes the detection of patterns, which compiles and runs numba code."""
+
+DENSE_FRACTION = 0.5
+"""Share of the variables that the entries of a dense cut read, on average."""
+
+PATTERN_CACHE_LIMIT = 256
+"""Number of patterns that are kept, so that the analysis and the lowering of a term share one."""
+
+patterns: OrderedDict[tuple[str, tuple[float, ...], TermSignature], "BlockPattern"] = (
+    OrderedDict()
+)
+"""Patterns of the cuts that were analysed, by jaxpr, signs and signature, oldest first."""
 
 
 class BlockPattern(NamedTuple):
@@ -84,6 +97,32 @@ def block_function(term: Term, signature: TermSignature) -> BlockFunction:
     return evaluate
 
 
+def pattern_of(term: Term, signature: TermSignature) -> BlockPattern:
+    """Returns the pattern of a block term, which is detected once for each term."""
+    key = (str(term.jaxpr), term.signs, signature)
+    with detection_lock:
+        found = patterns.get(key)
+    if found is not None:
+        return found
+    found = detect_pattern(block_function(term, signature), signature)
+    with detection_lock:
+        patterns[key] = found
+        while len(patterns) > PATTERN_CACHE_LIMIT:
+            patterns.popitem(last=False)
+    return found
+
+
+def is_dense(term: Term, shape: tuple[int, ...]) -> bool:
+    """Returns whether the entries of a cut with several entries read most of its variables.
+
+    Separating such a cut from the linear operation that follows it would give SCIP many
+    expressions that each read everything, instead of one.
+    """
+    signature = term_signature(term, shape)
+    pattern = pattern_of(term, signature)
+    return pattern.nnz > DENSE_FRACTION * signature.num_entries * signature.num_inputs
+
+
 def vector_avals(*sizes: int) -> tuple[jax.ShapeDtypeStruct, ...]:
     """Returns the shapes of flat vectors of the given lengths."""
     return tuple(jax.ShapeDtypeStruct((size,), jnp.float64) for size in sizes)
@@ -93,20 +132,26 @@ def detect_pattern(function: BlockFunction, signature: TermSignature) -> BlockPa
     """Returns the pattern of the dependencies of the entries of a block function.
 
     An entry that depends on no variable gets the first one, so that every expression has a
-    child. The derivative of such an entry is zero.
+    child. The derivative of such an entry is zero. If ASDEX cannot analyse the function,
+    every entry depends on every variable.
     """
     rows, inputs = signature.num_entries, signature.num_inputs
-    with detection_lock:
-        sparsity = asdex.jacobian_sparsity(
-            function, jnp.zeros(signature.num_inputs), jnp.zeros(signature.num_params)
-        )
-    found = np.asarray(sparsity.rows, dtype=np.int64)
+    try:
+        with detection_lock:
+            sparsity = asdex.jacobian_sparsity(
+                function,
+                jnp.zeros(signature.num_inputs),
+                jnp.zeros(signature.num_params),
+            )
+        found = np.asarray(sparsity.rows, dtype=np.int64)
+        found_columns = np.asarray(sparsity.cols, dtype=np.int64)
+    except NotImplementedError:
+        # ASDEX has no rule for some primitives, such as the root of `lax.custom_root`.
+        # Every entry may then read every variable.
+        found = np.repeat(np.arange(rows, dtype=np.int64), inputs)
+        found_columns = np.tile(np.arange(inputs, dtype=np.int64), rows)
     empty = np.setdiff1d(np.arange(rows), found)
-    keys = np.unique(
-        np.concatenate(
-            [found * inputs + np.asarray(sparsity.cols, dtype=np.int64), empty * inputs]
-        )
-    )
+    keys = np.unique(np.concatenate([found * inputs + found_columns, empty * inputs]))
     pointers = np.zeros(rows + 1, dtype=np.intc)
     np.cumsum(np.bincount(keys // inputs, minlength=rows), out=pointers[1:])
     return BlockPattern(pointers, np.ascontiguousarray(keys % inputs, dtype=np.intc))
@@ -225,7 +270,7 @@ def lower_block_programs(
     An optional program that cannot be lowered is left out. A required one raises.
     """
     function = block_function(term, signature)
-    pattern = detect_pattern(function, signature)
+    pattern = pattern_of(term, signature)
     lowered: list[LoweredProgram | None] = []
     skipped: list[str] = []
     programs = block_programs(function, pattern, signature, options.relaxation)

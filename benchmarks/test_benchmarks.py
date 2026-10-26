@@ -170,11 +170,21 @@ def batched() -> jcp.Problem:
     )
 
 
+def neighbours() -> jcp.Problem:
+    """Returns a vector constraint of 200 products of neighbouring variables."""
+    return jcp.Problem(
+        variables=jcp.Variable(lower=0.5, upper=3.0, shape=(201,)),
+        objective=lambda x, params: -jnp.sum(x),
+        constraints=(jcp.Constraint(lambda x, params: x[:-1] * x[1:], upper=4.0),),
+    )
+
+
 PROBLEMS: dict[str, Callable[[], jcp.Problem]] = {
     "camel": camel,
     "constrained": constrained,
     "mixed_integer": mixed_integer,
     "batched": batched,
+    "neighbours": neighbours,
 }
 """Problems of the build and solve benchmarks."""
 

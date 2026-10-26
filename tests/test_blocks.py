@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 import jaxcip as jcp
+from jaxcip import _blocks
 from jaxcip._block import BlockHandle, BlockStateRef
 from jaxcip._blocks import block_function, detect_pattern
 from jaxcip._compile import CompiledTerm, block_inputs, compiled_terms
@@ -26,11 +27,11 @@ TOLERANCE = 1e-9
 
 FUNCTIONS: dict[str, Callable[[jax.Array, Any], jax.Array]] = {
     "neighbours": lambda x, p: x[:-1] * x[1:],
-    "mixed": lambda x, p: jnp.stack(
-        [x[0] * x[1], jnp.exp(x[2]) - x[0] ** 2, jnp.sum(x**2)]
+    "mixed": lambda x, p: (
+        jnp.stack([x[0], jnp.exp(x[2]), jnp.sum(x**2)]) * jnp.stack([x[1], 1.0, 1.0])
     ),
     "scaled": lambda x, p: jnp.sin(p["scale"][0] * x[:-1]) * x[1:],
-    "constant_entry": lambda x, p: jnp.stack([x[0] * x[1], jnp.asarray(3.0)]),
+    "constant_entry": lambda x, p: jnp.stack([x[0], 3.0]) * jnp.stack([x[1], 1.0]),
     "elementwise": lambda x, p: jnp.exp(x) * x,
 }
 """Vector functions of `WIDTH` variables whose entries read few of them, and a dense one."""
@@ -102,7 +103,7 @@ def test_the_pattern_of_a_dense_row() -> None:
     term, _ = block_of("mixed")
     handle = term.handle
     assert isinstance(handle, BlockHandle)
-    assert list(np.diff(handle.pointers)) == [2, 2, WIDTH]
+    assert list(np.diff(handle.pointers)) == [2, 1, WIDTH]
 
 
 @pytest.mark.parametrize("name", sorted(FUNCTIONS))
@@ -465,9 +466,9 @@ def block_scip(
 @pytest.mark.parametrize(
     "function",
     [
-        lambda x, p: jnp.stack([jnp.log(x[0]) * x[1], x[0] * x[1]]),
-        lambda x, p: jnp.stack([jnp.sqrt(x[0]) * x[1], x[0] * x[1]]),
-        lambda x, p: jnp.stack([x[0] ** 1.5 * x[1], x[0] * x[1]]),
+        lambda x, p: jnp.log(jnp.stack([x[0], x[0]])) * x,
+        lambda x, p: jnp.sqrt(jnp.stack([x[0], x[0]])) * x,
+        lambda x, p: jnp.stack([x[0], x[0]]) ** 1.5 * x,
     ],
     ids=["infinite_value", "infinite_gradient", "infinite_hessian"],
 )
@@ -477,7 +478,7 @@ def test_non_finite_derivatives_give_no_hessian(
     """Checks that non-finite values and derivatives of an entry give no Hessian."""
     scip, state = block_scip(function)
     product = scip.hessian_direction(
-        BlockTerm(state, 0, 1.0),
+        BlockTerm(state, 1, 1.0),
         jcp.HandlerOptions(),
         np.array([0.0, 1.0]),
         np.array([1.0, 1.0]),
@@ -487,7 +488,7 @@ def test_non_finite_derivatives_give_no_hessian(
 
 def test_hessian_unavailable_for_entries() -> None:
     """Checks that no Hessian comes without the program or with Hessians switched off."""
-    function = lambda x, p: jnp.stack([x[0] * x[1], x[0] ** 2 * x[1]])  # noqa: E731
+    function = lambda x, p: jnp.exp(jnp.stack([x[0] * x[1], x[0] ** 2 * x[1]]))  # noqa: E731
     point, direction = np.array([0.7, 1.3]), np.array([1.0, 0.0])
     scip, state = block_scip(function)
     assert (
@@ -524,13 +525,6 @@ def test_hessian_unavailable_for_entries() -> None:
     )
 
 
-def two_entries(
-    function: Callable[[jax.Array], jax.Array],
-) -> Callable[[jax.Array, Any], jax.Array]:
-    """Returns a function of the variables with a second entry next to the one given."""
-    return lambda x, p: jnp.stack([function(x), jnp.exp(0.1 * x[1])])
-
-
 def test_unbounded_variables_in_a_block() -> None:
     """Checks a block over variables that are bounded only by linear constraints.
 
@@ -543,8 +537,9 @@ def test_unbounded_variables_in_a_block() -> None:
         constraints=(
             jcp.Constraint(lambda x, p: x, lower=-3.0, upper=3.0),
             jcp.Constraint(
-                lambda x, p: jnp.stack(
-                    [(x[0] - 1) ** 2 * jnp.exp(x[1]), jnp.exp(0.1 * x[1])]
+                lambda x, p: (
+                    jnp.stack([(x[0] - 1) ** 2, jnp.exp(0.1 * x[1])])
+                    * jnp.stack([jnp.exp(x[1]), 1.0])
                 ),
                 upper=jnp.array([2.0, 100.0]),
             ),
@@ -569,8 +564,9 @@ def test_free_variables_in_a_block() -> None:
         objective=lambda x, p: jnp.sum(x),
         constraints=(
             jcp.Constraint(
-                lambda x, p: jnp.stack(
-                    [jnp.sqrt(1 + x[0] ** 2) * jnp.exp(x[1] ** 2), x[0] * x[1]]
+                lambda x, p: (
+                    jnp.stack([jnp.sqrt(1 + x[0] ** 2), x[0]])
+                    * jnp.stack([jnp.exp(x[1] ** 2), x[1]])
                 ),
                 lower=jnp.array([-math.inf, 0.5]),
                 upper=jnp.array([2.0, 4.0]),
@@ -595,8 +591,10 @@ def test_overflowing_relaxations_in_a_block() -> None:
         objective=lambda x, p: x[2],
         constraints=(
             jcp.Constraint(
-                lambda x, p: jnp.stack(
-                    [jnp.exp(x[0]) * jnp.exp(-x[0]) * x[1] - x[2], x[1] * x[1]]
+                lambda x, p: (
+                    jnp.stack([jnp.exp(x[0]), x[1]])
+                    * jnp.stack([jnp.exp(-x[0]) * x[1], x[1]])
+                    - jnp.stack([x[2], 0.0])
                 ),
                 upper=jnp.array([0.0, 5.0]),
             ),
@@ -623,7 +621,10 @@ def test_steep_estimators_in_a_block() -> None:
         objective=lambda x, p: x[2] - x[0],
         constraints=(
             jcp.Constraint(
-                lambda x, p: jnp.stack([(x[0] - 15) ** 8 * x[1] - x[2], x[1] * x[1]]),
+                lambda x, p: (
+                    jnp.stack([(x[0] - 15) ** 8, x[1]]) * jnp.stack([x[1], x[1]])
+                    - jnp.stack([x[2], 0.0])
+                ),
                 upper=jnp.array([0.0, 5.0]),
             ),
         ),
@@ -676,7 +677,8 @@ def test_a_constant_entry_is_constant_in_every_direction() -> None:
         objective=lambda x, p: -jnp.sum(x),
         constraints=(
             jcp.Constraint(
-                lambda x, p: jnp.stack([x[0] * x[1], jnp.asarray(3.0)]), upper=4.0
+                lambda x, p: jnp.stack([x[0], 3.0]) * jnp.stack([x[1], 1.0]),
+                upper=4.0,
             ),
         ),
     )
@@ -732,8 +734,9 @@ def test_estimators_of_entries(overestimate: bool) -> None:
 def test_unusable_estimators() -> None:
     """Checks that estimators with infinite or too steep coefficients are reported as failures."""
     scip, state = block_scip(
-        lambda x, p: jnp.stack(
-            [jnp.exp(x[0]) * jnp.exp(-x[0]) * x[1], (x[0] - 15) ** 8 * x[1]]
+        lambda x, p: (
+            jnp.stack([jnp.exp(x[0]), (x[0] - 15) ** 8])
+            * jnp.stack([jnp.exp(-x[0]) * x[1], x[1]])
         )
     )
     del scip
@@ -769,8 +772,8 @@ def test_reverse_propagation_proves_infeasibility() -> None:
         objective=lambda x, p: x,
         constraints=(
             jcp.Constraint(
-                lambda x, p: jnp.stack([x - x**2, jnp.exp(x)]),
-                upper=jnp.array([0.1, 100.0]),
+                lambda x, p: jnp.stack([x, jnp.exp(x)]) * jnp.stack([1 - x, 1.0]),
+                upper=jnp.array([0.2, 100.0]),
             ),
         ),
     )
@@ -788,7 +791,7 @@ def test_skipped_programs_of_a_block() -> None:
         objective=lambda x, p: jnp.sum(x),
         constraints=(
             jcp.Constraint(
-                lambda x, p: jnp.stack([jnp.abs(x[0]) * x[1], x[1] ** 2]), upper=4.0
+                lambda x, p: jnp.stack([jnp.abs(x[0]), x[1]]) * x[1], upper=4.0
             ),
         ),
     )
@@ -831,7 +834,10 @@ def test_a_required_program_of_a_block_may_fail() -> None:
         objective=lambda x, p: jnp.sum(x),
         constraints=(
             jcp.Constraint(
-                lambda x, p: jnp.stack([jnp.where(x[0] > 0, x[0], x[1] ** 2), x[1]]),
+                lambda x, p: (
+                    jnp.stack([jnp.where(x[0] > 0, x[0], x[1] ** 2), x[1]])
+                    * jnp.stack([1.0, x[1]])
+                ),
                 upper=4.0,
             ),
         ),
@@ -905,3 +911,17 @@ def test_prefetch_with_a_fixed_variable() -> None:
         options=jcp.SolveOptions(time_limit=60.0, verbosity=jcp.Verbosity.QUIET),
     )
     assert solution.status is jcp.Status.OPTIMAL
+
+
+def test_the_pattern_cache_forgets_the_oldest_pattern(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks that only the newest patterns are kept for the lowering to find."""
+    monkeypatch.setattr(_blocks, "PATTERN_CACHE_LIMIT", 1)
+    first, _ = block_of("neighbours")
+    second, _ = block_of("elementwise")
+    patterns = _blocks.patterns
+    assert len(patterns) == 1
+    for term in (first, second):
+        _blocks.pattern_of(term.term, term.signature)
+    assert len(patterns) == 1

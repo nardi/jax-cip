@@ -1,6 +1,8 @@
 """Solving compiled problems with SCIP."""
 
+import bisect
 import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -12,6 +14,8 @@ from jaxcip._cache import BuildStatistics
 from jaxcip._compile import (
     Block,
     CompiledProblem,
+    CompiledTerm,
+    LinearRows,
     block_inputs,
     compile,  # noqa: A004
     linear_rows,
@@ -166,7 +170,7 @@ def build_scip(compiled: CompiledProblem, params: PyTree[Any]) -> Scip:
                 bounds = (0.0, math.inf)
             case _:
                 raise AssertionError(f"Unknown sense {compiled.problem.sense}.")
-        terms = row_terms(objective_block, variables, param_leaves, handler)[0]
+        terms = row_terms(objective_block, variables, param_leaves, handler, linear)[0]
         scip.add_jax_constraint(
             terms,
             np.array([epigraph], np.intc),
@@ -195,27 +199,49 @@ def row_terms(
     variables: Any,
     param_leaves: list[np.ndarray],
     handler: HandlerOptions,
+    linear: LinearRows,
 ) -> list[list[JaxTerm | BlockTerm]]:
-    """Returns the nonlinear terms of every row of a block.
+    """Returns the nonlinear terms of every row of a block, with their coefficients.
 
-    The entries of a block term share one state in the new SCIP instance.
+    A row is a sum of entries of the cuts, each with a coefficient, and a linear part. An
+    entry of a block term shares its state with the other entries in the new SCIP instance.
     """
-    rows: list[list[JaxTerm | BlockTerm]] = [[] for _ in range(block.rows)]
+    offsets = [0]
+    makers: list[Callable[[int, float], JaxTerm | BlockTerm]] = []
     for compiled in block.terms:
-        if isinstance(compiled.handle, BlockHandle):
-            block_variables, block_params = block_inputs(
-                compiled, block, variables, param_leaves
-            )
-            state = BlockStateRef(
-                compiled.handle, block_params, block_variables, handler
-            )
-            for row in range(block.rows):
-                rows[row].append(BlockTerm(state, row, 1.0))
-            continue
-        inputs, params = term_rows(compiled, block, variables, param_leaves)
-        for row in range(block.rows):
-            rows[row].append(JaxTerm(compiled.handle, params[row], inputs[row], 1.0))
+        offsets.append(offsets[-1] + compiled.entries)
+        makers.append(term_maker(compiled, block, variables, param_leaves, handler))
+    rows: list[list[JaxTerm | BlockTerm]] = []
+    for row in range(block.rows):
+        columns, coefficients = linear.cut_row(row)
+        terms: list[JaxTerm | BlockTerm] = []
+        for column, coefficient in zip(columns, coefficients, strict=True):
+            cut = bisect.bisect_right(offsets, int(column)) - 1
+            terms.append(makers[cut](int(column) - offsets[cut], float(coefficient)))
+        rows.append(terms)
     return rows
+
+
+def term_maker(
+    compiled: CompiledTerm,
+    block: Block,
+    variables: Any,
+    param_leaves: list[np.ndarray],
+    handler: HandlerOptions,
+) -> Callable[[int, float], JaxTerm | BlockTerm]:
+    """Returns a function that makes the term of one entry of a cut with a coefficient."""
+    if isinstance(compiled.handle, BlockHandle):
+        block_variables, block_params = block_inputs(
+            compiled, block, variables, param_leaves
+        )
+        state = BlockStateRef(compiled.handle, block_params, block_variables, handler)
+        return lambda entry, coefficient: BlockTerm(state, entry, coefficient)
+    handle = compiled.handle
+    assert isinstance(handle, FunctionHandle)
+    inputs, params = term_rows(compiled, block, variables, param_leaves)
+    return lambda entry, coefficient: JaxTerm(
+        handle, params[entry], inputs[entry], coefficient
+    )
 
 
 def add_block(
@@ -229,7 +255,7 @@ def add_block(
     variables = compiled.variables
     linear = linear_rows(block, variables, param_leaves)
     constant = linear.constants
-    terms = row_terms(block, variables, param_leaves, handler)
+    terms = row_terms(block, variables, param_leaves, handler, linear)
     for row in range(block.rows):
         lower, upper = block.lower[row], block.upper[row]
         if lower == -math.inf and upper == math.inf:

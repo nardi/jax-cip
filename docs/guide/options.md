@@ -30,7 +30,7 @@ options = jcp.SolveOptions(
     emphasis=jcp.Emphasis.OPTIMALITY,
     settings=(
         jcp.ScipSetting(jcp.ScipParameter.NUMERICS_FEASTOL, 1e-7),
-        jcp.ScipSetting(jcp.ScipParameter.LIMITS_SOLUTIONS, 50),
+        jcp.ScipSetting(jcp.ScipParameter.LIMITS_SOLUTIONS, 500),
     ),
 )
 solution = jcp.solve(problem, options=options)
@@ -45,7 +45,9 @@ assert solution.status is jcp.Status.OPTIMAL
 
 [`CompileOptions`][jaxcip.CompileOptions] decides how functions become SCIP expressions.
 
-- `split_sums` turns each nonlinear summand into its own term. [JAX functions in
+- `split_sums` cuts a function at the largest nonlinear values, such as each summand of
+  a sum or each entry of a vector inside a `jnp.sum`, and makes each cut its own term.
+  Without it the whole output is one term. [JAX functions in
   SCIP](../theory/jax.md#jaxpr-analysis) explains the trade-off.
 - `gradient_interval_limit` is the size, in jaxpr equations, above which a term has no
   gradient interval program and so no monotonicity.
@@ -76,7 +78,9 @@ assert solution.status is jcp.Status.OPTIMAL
 ### Handler options
 
 [`HandlerOptions`][jaxcip.HandlerOptions] switches off parts of the expression handler.
-None of them changes the results. They exist to measure what each part gains. The
+None of them changes the results. They exist to measure what each part gains. Among them,
+`prefetch` lets the first entry of a vector function that needs a program run fill the
+inputs of all its entries from SCIP's state, so that one run answers them all. The
 [performance](performance.md) page shows how to read the counters that come with every
 solution.
 

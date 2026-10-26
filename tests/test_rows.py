@@ -102,8 +102,10 @@ def test_rows_in_a_sum_with_a_sign_and_an_affine_part() -> None:
     )
     compiled = compiled_rows(constraint)
     block = compiled.constraints[0]
-    assert [term.term.signs for term in block.terms] == [(-1.0,), (-1.0,)]
     assert block.analysis.affine is not None
+    linear = linear_rows(block, compiled.variables, [])
+    # Each row subtracts one entry of each of the two cuts.
+    np.testing.assert_array_equal(linear.cut_coefficients, np.full(2 * COUNT, -1.0))
     solution = jcp.solve(
         jcp.Problem(
             variables=jcp.Variable(lower=0.5, upper=2.0, shape=(WIDTH,)),
@@ -208,12 +210,16 @@ def test_a_vector_that_is_not_made_of_variables_is_an_ordinary_term() -> None:
     assert point[0] * point[1] >= 10.0 - 1e-5 and point[1] * point[2] >= 10.0 - 1e-5
 
 
-def test_rows_that_are_not_the_whole_output_are_ordinary_terms() -> None:
-    """Checks that a function of the rows, such as their sum, is an ordinary term."""
+def test_the_sum_of_rows_is_a_row_of_their_entries() -> None:
+    """Checks that a sum of rows keeps the terms of its rows and sums them with coefficients."""
     row = jcp.rows(product_row, TABLE, weights())
     compiled = compiled_rows(jcp.Constraint(lambda x, p: jnp.sum(row(x)), upper=100.0))
-    [term] = compiled.constraints[0].terms
-    assert term.term.gather is None
+    block = compiled.constraints[0]
+    assert len(block.terms) == 2
+    assert all(term.term.gather is not None for term in block.terms)
+    linear = linear_rows(block, compiled.variables, [])
+    assert block.rows == 1
+    np.testing.assert_array_equal(linear.cut_coefficients, np.ones(2 * COUNT))
 
 
 def test_rows_without_splitting_sums_are_an_ordinary_term() -> None:

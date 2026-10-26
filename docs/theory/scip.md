@@ -41,7 +41,10 @@ handlers](https://www.scipopt.org/doc/html/NLHDLR.php) detect structure across s
 nodes, such as quadratic forms, convex subexpressions and products of binaries.
 
 An [expression handler](https://www.scipopt.org/doc/html/EXPRHDLR.php) implements
-callbacks. JAX-CIP's `jax` handler implements these:
+callbacks. JAX-CIP has two handlers that implement the same ones. The `jax` handler stands
+for a scalar function. The `jaxblock` handler stands for one entry of a vector function,
+with the variables that entry reads as children, and the entries of one vector function
+share their program runs ([Blocks](jax.md#blocks)). The callbacks are:
 
 | Callback | What SCIP uses it for |
 | --- | --- |
@@ -66,7 +69,8 @@ relaxations with JAXormick and returns their tangent planes.
 SCIP's own handlers give tight, often exact, answers for their single operator, and SCIP
 combines them across the graph. A JAX term is one node with many children, so SCIP
 cannot look inside it. [JAX functions in SCIP](jax.md) describes how JAX-CIP keeps that
-loss small.
+loss small, by cutting a function into the largest nonlinear values and giving each
+entry of a cut only the variables it reads.
 
 ## Hessians and Ipopt
 

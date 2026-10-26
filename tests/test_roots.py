@@ -14,6 +14,7 @@ from jaxormick._implicit import inverse
 
 import jaxcip as jcp
 from jaxcip._analysis import analyse
+from jaxcip._blocks import is_dense
 from jaxcip._compile import CompiledTerm, term_rows
 from jaxcip._handler import FunctionHandle, output_sizes, program_slots
 from jaxcip._problem import Scip
@@ -102,7 +103,7 @@ def test_state_size_counts_the_roots_at_the_top_level() -> None:
 
     def analysed(function: Callable[[jax.Array], jax.Array]) -> Any:
         [term] = analyse(
-            function, [jax.ShapeDtypeStruct((SIZE,), jnp.float64)], [], True
+            function, [jax.ShapeDtypeStruct((SIZE,), jnp.float64)], [], True, is_dense
         ).nonlinear
         return term.jaxpr
 
@@ -245,7 +246,7 @@ def test_handle_validation_with_roots() -> None:
 def test_programs_without_roots_are_unchanged() -> None:
     """Checks that terms without a root keep the programs and shapes they had."""
     x = jax.ShapeDtypeStruct((SIZE,), jnp.float64)
-    [plain] = analyse(lambda v: jnp.sum(jnp.sin(v) ** 2), [x], [], True).nonlinear
+    [plain] = analyse(lambda v: jnp.prod(jnp.sin(v)), [x], [], True, is_dense).nonlinear
     signature = term_signature(plain, ())
     assert signature.state_size == 0
     assert len(program_shapes(Program.VALUE_AND_GRADIENT, SIZE, 1)) == 2

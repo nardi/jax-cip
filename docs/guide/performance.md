@@ -88,6 +88,11 @@ option or a different split of the function may need fewer.
   `solve` calls skips tracing, analysis and the cache lookup.
 - Write rows of the same form with [`rows`][jaxcip.rows]. They share programs and each
   row gets only its own variables.
+- Write vector expressions as vectors. A constraint such as `x[:-1] * x[1:]` compiles in
+  the time of one scalar row, and each entry gets only the two variables it reads. A sum or
+  a matrix product over the entries keeps them apart, so `jnp.sum(x**4 - 16*x**2 + 5*x)`
+  is two vectors of cuts and a linear term, and `W @ f(x)` with `W` in the parameters
+  gets the entries of `W` as coefficients at every solve.
 - Keep affine parts as plain sums. The analysis passes them to SCIP as linear
   coefficients, which SCIP propagates and separates exactly.
 - Keep `split_sums` on unless a sum has many tiny summands. Separate terms relax over

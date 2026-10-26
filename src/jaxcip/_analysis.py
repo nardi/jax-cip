@@ -1,9 +1,12 @@
-"""Analysis of the jaxpr of a function into an affine part and nonlinear terms.
+"""Analysis of the jaxpr of a function into cuts and the affine remainder that combines them.
 
 SCIP handles affine functions much better than opaque ones, since it propagates and
-separates linear rows exactly. The analysis splits the output of a function at additions
-and subtractions into terms, classifies each term as affine or nonlinear in the variables,
-and keeps for every term only the inputs it depends on.
+separates linear rows exactly. The analysis walks back from the output of a function through
+operations that are linear in their nonlinear operands, such as additions, sums, products
+with constants and matrix products with constants. It stops at the largest nonlinear values,
+the cuts. Everything else is affine in the cuts and the variables, and its derivatives give
+the coefficients with which the cuts and the variables enter the output. Every cut keeps
+only the inputs it depends on.
 """
 
 import enum
@@ -47,6 +50,8 @@ class Origin(enum.Enum):
     """A leaf of the parameters."""
     GATHER = 3
     """The variables that the rows of a `rows` term read, as one vector per row."""
+    CUT = 4
+    """A cut, which the remainder of a function takes as an input."""
 
 
 class InputRef(NamedTuple):
@@ -92,20 +97,22 @@ class Term(NamedTuple):
 
 
 class Analysis(NamedTuple):
-    """The affine part and the nonlinear terms of a function."""
+    """The cuts of a function and the affine remainder that combines them."""
 
     shape: tuple[int, ...]
     """Shape of the output of the function."""
     constants: tuple[np.ndarray, ...]
     """Arrays that the function closes over."""
     affine: Term | None
-    """Sum of the affine and constant terms, if there are any."""
+    """The output as a function of the cuts, the variables and the parameters.
+
+    It is affine in the cuts and the variables. It is `None` if the output is the only cut.
+    """
     nonlinear: tuple[Term, ...]
-    """Nonlinear terms, each a single value unless sums are not split."""
+    """The cuts: the largest nonlinear values that the output is an affine function of."""
+    cut_shapes: tuple[tuple[int, ...], ...]
+    """Shape of the value of each cut. A cut of `rows` has one entry per row."""
 
-
-SPLIT_PRIMITIVES = frozenset({"add", "add_any", "sub", "neg"})
-"""Primitives whose outputs are sums or differences of their operands."""
 
 LINEAR_PRIMITIVES = frozenset(
     {
@@ -159,20 +166,27 @@ SUBJAXPR_PARAMETERS = ("jaxpr", "call_jaxpr")
 """Parameters that hold the body of call primitives."""
 
 
+DenseCheck = Callable[[Term, tuple[int, ...]], bool]
+"""Tells whether the entries of a cut with the given shape read most of its inputs."""
+
+
 def analyse(
     function: Callable[..., Array],
     variables: Sequence[jax.ShapeDtypeStruct],
     parameters: Sequence[jax.ShapeDtypeStruct],
     split_sums: bool,
+    is_dense: DenseCheck | None = None,
 ) -> Analysis:
-    """Returns the affine part and the nonlinear terms of `function(*variables, *parameters)`.
+    """Returns the cuts of `function(*variables, *parameters)` and the remainder that combines them.
 
-    With `split_sums`, every nonlinear term of the outer sum is separate. Without it, the
-    nonlinear terms form one term.
+    With `split_sums`, the cuts are the largest nonlinear values that the output is an affine
+    function of. Without it, the output is the only cut. A cut with several entries that
+    all read most of its inputs, as `is_dense` finds out, is not worth separating from the
+    linear operation that follows it, so that operation joins the cut.
     """
     first_number = last_number[0] + 1
     try:
-        return analyse_function(function, variables, parameters, split_sums)
+        return analyse_function(function, variables, parameters, split_sums, is_dense)
     finally:
         # The descriptions of marked rows are only needed while this analysis reads them.
         forget_since(first_number)
@@ -183,6 +197,7 @@ def analyse_function(
     variables: Sequence[jax.ShapeDtypeStruct],
     parameters: Sequence[jax.ShapeDtypeStruct],
     split_sums: bool,
+    is_dense: DenseCheck | None = None,
 ) -> Analysis:
     """Returns the analysis of a function, which `analyse` wraps to clean up after it."""
     closed = jax.make_jaxpr(function)(*variables, *parameters)
@@ -196,8 +211,6 @@ def analyse_function(
     )
     output = jaxpr.outvars[0]
     producers = {var: equation for equation in jaxpr.eqns for var in equation.outvars}
-    affine: list[tuple[Atom, float]] = []
-    nonlinear: list[tuple[Atom, float]] = []
     known = propagate(
         jaxpr,
         [
@@ -206,28 +219,149 @@ def analyse_function(
         ],
         (),
     )
-    for atom, sign in summands(output, 1.0, producers):
-        if isinstance(atom, Var) and known[atom] is Linearity.NONLINEAR:
-            nonlinear.append((atom, sign))
-        else:
-            affine.append((atom, sign))
-    groups = [(pair,) for pair in nonlinear] if split_sums else [tuple(nonlinear)]
-    constants = [np.asarray(constant) for constant in closed.consts]
-    shape = shape_of(output)
-    terms: list[Term] = []
-    for group in groups:
-        if not group:
-            continue
-        built = None
-        if split_sums:
-            built = rows_term(jaxpr, origins, group[0], shape, producers, constants)
-        terms.append(built if built is not None else subterm(jaxpr, origins, group))
+    opaque: set[int] = set()
+    while True:
+        constants = [np.asarray(constant) for constant in closed.consts]
+        cuts, consumers = find_cuts(jaxpr, output, known, producers, split_sums, opaque)
+        remainder, used = remainder_term(jaxpr, origins, output, cuts)
+        cuts = [cut for cut, is_used in zip(cuts, used, strict=True) if is_used]
+        terms: list[Term] = []
+        for cut in cuts:
+            built = rows_term(jaxpr, origins, cut, producers, constants)
+            terms.append(
+                built if built is not None else subterm(jaxpr, origins, ((cut, 1.0),))
+            )
+        shapes = [
+            (len(term.gather.leaves),) if term.gather is not None else shape_of(cut)
+            for term, cut in zip(terms, cuts, strict=True)
+        ]
+        joined = {
+            id(equation)
+            for term, cut, shape in zip(terms, cuts, shapes, strict=True)
+            if is_dense is not None
+            and term.gather is None
+            and math.prod(shape) > 1
+            and is_dense(term, shape)
+            for equation in consumers.get(cut, ())
+        } - opaque
+        if not joined:
+            break
+        opaque |= joined
     return Analysis(
-        shape=shape,
+        shape=shape_of(output),
         constants=tuple(constants),
-        affine=subterm(jaxpr, origins, tuple(affine)) if affine else None,
+        affine=None if cuts == [output] else remainder,
         nonlinear=tuple(terms),
+        cut_shapes=tuple(shapes),
     )
+
+
+def is_transparent(equation: JaxprEqn, known: dict[Var, Linearity]) -> bool:
+    """Returns whether an equation is linear in its nonlinear operands.
+
+    A nonlinear operand is treated as a variable, so the equation is transparent if its outputs
+    are affine in the operands that depend on the variables: sums, products and matrix
+    products with constants, reshapes, and the like.
+    """
+    inputs = [
+        Linearity.CONSTANT
+        if isinstance(atom, Literal)
+        else Linearity.AFFINE
+        if known[atom] is not Linearity.CONSTANT
+        else Linearity.CONSTANT
+        for atom in equation.invars
+    ]
+    return all(
+        linearity <= Linearity.AFFINE
+        for linearity in equation_linearity(equation, inputs)
+    )
+
+
+def find_cuts(
+    jaxpr: Jaxpr,
+    output: Atom,
+    known: dict[Var, Linearity],
+    producers: dict[Var, JaxprEqn],
+    split_sums: bool,
+    opaque: set[int],
+) -> tuple[list[Var], dict[Var, list[JaxprEqn]]]:
+    """Returns the cuts of a function, and the equations that the search passed through after each.
+
+    The cuts are the largest nonlinear values that the output is affine in. The search walks
+    back from the output through values that are affine and through operations that are
+    linear in their nonlinear operands, except for the equations whose `id` is in `opaque`.
+    Without `split_sums`, the output is the only cut, if it is nonlinear.
+    """
+    consumers: dict[Var, list[JaxprEqn]] = {}
+    if not split_sums:
+        is_cut = isinstance(output, Var) and known[output] is Linearity.NONLINEAR
+        return ([output] if is_cut and isinstance(output, Var) else []), consumers
+    cuts: set[Var] = set()
+    seen: set[Var] = set()
+    pending: list[Atom] = [output]
+    while pending:
+        atom = pending.pop()
+        if not isinstance(atom, Var) or atom in seen:
+            continue
+        seen.add(atom)
+        equation = producers.get(atom)
+        if equation is None:
+            continue
+        if known[atom] is Linearity.NONLINEAR and (
+            id(equation) in opaque or not is_transparent(equation, known)
+        ):
+            cuts.add(atom)
+            continue
+        for operand in equation.invars:
+            if isinstance(operand, Var):
+                consumers.setdefault(operand, []).append(equation)
+        pending.extend(equation.invars)
+    order = {var: index for index, var in enumerate(producers)}
+    return sorted(cuts, key=order.__getitem__), consumers
+
+
+def remainder_term(
+    jaxpr: Jaxpr, origins: Sequence[InputRef], output: Atom, cuts: Sequence[Var]
+) -> tuple[Term, list[bool]]:
+    """Returns the output as a function of the cuts, and which of the cuts it uses.
+
+    The jaxpr of the term takes the cuts that it uses first, in order, and then the inputs of
+    the function that it uses.
+    """
+    cut_set = set(cuts)
+    equations = [
+        equation
+        for equation in jaxpr.eqns
+        if not any(var in cut_set for var in equation.outvars)
+    ]
+    standalone = jaxpr.replace(
+        invars=[*cuts, *jaxpr.invars], eqns=equations, outvars=[output]
+    )
+    pruned, used = partial_eval.dce_jaxpr(standalone, [True], instantiate=False)
+    cut_used = used[: len(cuts)]
+    refs = [
+        *(InputRef(Origin.CUT, index) for index in range(sum(cut_used))),
+        *(
+            origin
+            for origin, is_used in zip(origins, used[len(cuts) :], strict=True)
+            if is_used
+        ),
+    ]
+    classes = [
+        Linearity.AFFINE
+        if ref.origin in (Origin.VARIABLE, Origin.CUT)
+        else Linearity.CONSTANT
+        for ref in refs
+    ]
+    linearity = max(linearity_of(pruned, classes, ()), default=Linearity.CONSTANT)
+    term = Term(
+        jaxpr=pruned,
+        signs=(1.0,),
+        inputs=tuple(refs),
+        selections=(None,) * len(refs),
+        linearity=linearity,
+    )
+    return term, cut_used
 
 
 def variable_views(
@@ -365,22 +499,20 @@ VIEW_PRIMITIVES = frozenset(
 def rows_term(
     jaxpr: Jaxpr,
     origins: Sequence[InputRef],
-    pair: tuple[Atom, float],
-    shape: tuple[int, ...],
+    atom: Var,
     producers: dict[Var, JaxprEqn],
     constants: list[np.ndarray],
 ) -> Term | None:
-    """Returns the term of `rows` that a nonlinear value is, or `None` if it is not one.
+    """Returns the term of `rows` that a cut is, or `None` if it is not one.
 
-    The value has to be the result of the marked call itself, for the whole output. The
-    vector it reads has to be made of variables alone, and each parameter of the rows an
-    input of the function. Otherwise the value is an ordinary term. The constants that the
-    row function closes over are appended to `constants`.
+    The cut has to be the result of the marked call itself. The vector it reads has to be
+    made of variables alone, and each parameter of the rows an input of the function.
+    Otherwise the cut is an ordinary term. The constants that the row function closes over
+    are appended to `constants`.
     """
-    atom, sign = pair
-    equation = producers.get(atom) if isinstance(atom, Var) else None
+    equation = producers.get(atom)
     description = None if equation is None else description_of(equation)
-    if equation is None or description is None or shape_of(atom) != shape:
+    if equation is None or description is None:
         return None
     vector, *row_parameters = equation.invars
     view = variable_views(jaxpr, origins)(vector)
@@ -422,7 +554,7 @@ def rows_term(
     leaves, entries = view
     return Term(
         jaxpr=partial_eval.convert_constvars_jaxpr(closed.jaxpr),
-        signs=(sign,),
+        signs=(1.0,),
         inputs=tuple(refs),
         selections=(None,) * len(refs),
         linearity=Linearity.NONLINEAR,
@@ -451,10 +583,13 @@ class RowPiece(NamedTuple):
 
 
 class RowSplit(NamedTuple):
-    """The function of `rows` as an affine part and nonlinear pieces, which sum to it."""
+    """The function of `rows` as scalar pieces and the affine combination that makes the row."""
 
-    affine: Callable[..., Array] | None
-    """The affine part, as a function of the entries and the leaves of one row."""
+    combine: Callable[..., Array] | None
+    """The row as a function of its entries, the values of the pieces and its parameters.
+
+    It is `None` if the row is its only piece.
+    """
     pieces: tuple[RowPiece, ...]
 
 
@@ -466,14 +601,22 @@ def split_rows(
 ) -> RowSplit:
     """Splits the function of one row like the analysis splits any function.
 
-    Each nonlinear summand reads only its own entries and parameters, so SCIP gets it with
-    only the variables that it needs, and the affine part becomes linear rows. A function
-    that is a single term over all of its inputs stays as it is.
+    Each cut reads only its own entries and parameters, so SCIP gets it with only the
+    variables that it needs, and the rest becomes linear rows. A function that is a single
+    cut over all of its inputs, or that has cuts that are not scalars, stays as it is.
     """
 
     def flat(entries: Array, *leaves: Array) -> Array:
         return jnp.asarray(function(entries, jax.tree.unflatten(structure, leaves)))
 
+    whole = RowSplit(
+        None,
+        (
+            RowPiece(
+                function, np.arange(width), tuple(range(len(row_avals))), structure
+            ),
+        ),
+    )
     analysis = analyse(
         flat, [jax.ShapeDtypeStruct((width,), jnp.float64)], row_avals, True
     )
@@ -481,13 +624,22 @@ def split_rows(
         raise ValueError(
             f"The function of rows must return a scalar, not shape {analysis.shape}."
         )
+    if (
+        any(shape != () for shape in analysis.cut_shapes)
+        or any(term.gather is not None for term in analysis.nonlinear)
+        or not analysis.nonlinear
+    ):
+        return whole
     constants = analysis.constants
-    affine = None
-    if analysis.affine is not None:
-        affine_term = analysis.affine
+    remainder = analysis.affine
+    combine = None
+    if remainder is not None:
 
-        def affine(entries: Array, *leaves: Array) -> Array:
-            return evaluate_term(affine_term, (), constants, [entries], leaves)
+        def combine(
+            entries: Array, cuts: Sequence[Array], leaves: Sequence[Array]
+        ) -> Array:
+            assert remainder is not None
+            return evaluate_term(remainder, (), constants, [entries], leaves, cuts)
 
     pieces = []
     for term in analysis.nonlinear:
@@ -509,15 +661,13 @@ def split_rows(
             )
         )
     if (
-        affine is None
+        combine is None
         and len(pieces) == 1
         and len(pieces[0].columns) == width
         and len(pieces[0].leaves) == len(row_avals)
     ):
-        return RowSplit(
-            None, (pieces[0]._replace(function=function, structure=structure),)
-        )
-    return RowSplit(affine, tuple(pieces))
+        return whole
+    return RowSplit(combine, tuple(pieces))
 
 
 def piece_function(
@@ -552,30 +702,6 @@ def shape_of(atom: Atom) -> tuple[int, ...]:
 def dtype_of(atom: Atom) -> np.dtype:
     """Returns the type of the entries of a value of a jaxpr."""
     return cast(ShapedArray, atom.aval).dtype
-
-
-def summands(
-    atom: Atom, sign: float, producers: dict[Var, JaxprEqn]
-) -> list[tuple[Atom, float]]:
-    """Returns the terms of a value that is a sum, with their signs."""
-    pending = [(atom, sign)]
-    terms: list[tuple[Atom, float]] = []
-    # A long chain of additions is deep, so a stack replaces recursion, with operands
-    # pushed in reverse to keep the terms in the order of the sum.
-    while pending:
-        atom, sign = pending.pop()
-        equation = producers.get(atom) if isinstance(atom, Var) else None
-        if equation is None or equation.primitive.name not in SPLIT_PRIMITIVES:
-            terms.append((atom, sign))
-            continue
-        match equation.primitive.name, equation.invars:
-            case "neg", [operand]:
-                pending.append((operand, -sign))
-            case "sub", [first, second]:
-                pending += [(second, -sign), (first, sign)]
-            case _:
-                pending += [(operand, sign) for operand in reversed(equation.invars)]
-    return terms
 
 
 def subterm(
@@ -701,8 +827,6 @@ def read_entries(jaxpr: Jaxpr, var: Var) -> tuple[int, ...] | None:
     static indexing such as `x[3]`, `x[2:5]` and `x[1:][2]`. Any other use reads the whole
     input.
     """
-    if var in jaxpr.outvars:
-        return None
     views = {var: input_entries(var)}
     is_read = np.zeros(views[var].size, dtype=bool)
     for equation in jaxpr.eqns:
@@ -796,12 +920,14 @@ def evaluate_term(
     constants: Sequence[Any],
     variables: Sequence[Any],
     parameters: Sequence[Any],
+    cuts: Sequence[Any] = (),
 ) -> Float[Array, "*shape"]:
-    """Returns the value of a term from all inputs of the analysed function."""
+    """Returns the value of a term from all inputs of the analysed function and its cuts."""
     sources = {
         Origin.CONSTANT: constants,
         Origin.VARIABLE: variables,
         Origin.PARAMETER: parameters,
+        Origin.CUT: cuts,
     }
     arguments = [
         sources[ref.origin][ref.index]

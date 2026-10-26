@@ -24,7 +24,7 @@ from jaxtyping import Array, Float, Int, PyTree
 from jaxcip import _cache
 from jaxcip._analysis import Analysis, Origin, Term, analyse, evaluate_term
 from jaxcip._block import BlockHandle
-from jaxcip._blocks import BlockPattern, LoweredTerm, lower_block_programs
+from jaxcip._blocks import BlockPattern, LoweredTerm, is_dense, lower_block_programs
 from jaxcip._handler import FunctionHandle
 from jaxcip._options import CompileOptions
 from jaxcip._problem_types import (
@@ -113,11 +113,17 @@ class ParamsLayout(NamedTuple):
 
 
 class CompiledTerm(NamedTuple):
-    """A nonlinear term with its compiled programs."""
+    """A cut of a function with its compiled programs."""
 
     term: Term
     signature: TermSignature
     handle: FunctionHandle | BlockHandle
+
+    @property
+    def entries(self) -> int:
+        """Number of entries of the cut, each of which is one expression in SCIP."""
+        gather = self.term.gather
+        return len(gather.leaves) if gather is not None else self.signature.num_entries
 
 
 class RequestedTerm(NamedTuple):
@@ -296,9 +302,9 @@ class HandleBuilder:
 class Block(NamedTuple):
     """Rows of a problem that come from one function.
 
-    A `Constraint` or the objective has one row per entry of its output. The terms of a row
-    read the variables of the function, or for terms of `rows` the variables of their own
-    row.
+    A `Constraint` or the objective has one row per entry of its output. Each row is an
+    affine function of the entries of the cuts of the function and of the variables. The
+    terms are the cuts, and the cut entries come one cut after the other.
     """
 
     analysis: Analysis
@@ -306,7 +312,10 @@ class Block(NamedTuple):
     lower: Float[np.ndarray, " rows"]
     upper: Float[np.ndarray, " rows"]
     affine: "AffineFunction | None"
-    """Maps parameter leaves to the constants and the Jacobian entries of the affine part."""
+    """Maps parameter leaves to the constants and the Jacobian entries of the remainder.
+
+    It is `None` if the output is the only cut, so that each row is one entry of the cut.
+    """
 
     @property
     def rows(self) -> int:
@@ -315,13 +324,13 @@ class Block(NamedTuple):
 
 
 class AffineValues(NamedTuple):
-    """The constants and the Jacobian entries of the affine part of a block."""
+    """The constants and the Jacobian entries of the affine remainder of a block."""
 
     constants: Float[np.ndarray, " rows"]
     rows: Int[np.ndarray, " nnz"]
     """Row of each entry."""
     columns: Int[np.ndarray, " nnz"]
-    """Variable index of each entry."""
+    """Entry of the cuts, then variable, that each entry is the derivative with respect to."""
     values: Float[np.ndarray, " nnz"]
     """Coefficient of each entry, which may be zero."""
 
@@ -331,7 +340,7 @@ AffineFunction = Callable[[Sequence[np.ndarray]], AffineValues]
 
 
 class LinearRows(NamedTuple):
-    """The affine part of a block as constants and a sparse matrix with one row per row."""
+    """The remainder of a block as constants and two sparse matrices with one row per row."""
 
     constants: Float[np.ndarray, " rows"]
     pointers: Int[np.ndarray, " rows_plus_one"]
@@ -340,11 +349,24 @@ class LinearRows(NamedTuple):
     """Variable index of each entry, as `np.intc`, in the order of the rows."""
     coefficients: Float[np.ndarray, " nnz"]
     """Coefficient of each entry. No entry is zero."""
+    cut_pointers: Int[np.ndarray, " rows_plus_one"]
+    """Start of each row in `cut_columns` and `cut_coefficients`, then their total number."""
+    cut_columns: Int[np.ndarray, " cut_nnz"]
+    """Entry of the cuts of each entry, in the order of the rows."""
+    cut_coefficients: Float[np.ndarray, " cut_nnz"]
+    """Coefficient of each cut entry. No entry is zero."""
 
     def row(self, row: int) -> tuple[Int[np.ndarray, " k"], Float[np.ndarray, " k"]]:
         """Returns the variable indices and coefficients of one row."""
         span = slice(self.pointers[row], self.pointers[row + 1])
         return self.indices[span], self.coefficients[span]
+
+    def cut_row(
+        self, row: int
+    ) -> tuple[Int[np.ndarray, " k"], Float[np.ndarray, " k"]]:
+        """Returns the cut entries and coefficients of one row."""
+        span = slice(self.cut_pointers[row], self.cut_pointers[row + 1])
+        return self.cut_columns[span], self.cut_coefficients[span]
 
 
 class CompiledProblem(NamedTuple):
@@ -508,7 +530,7 @@ def function_block(
     variable_avals = [
         jax.ShapeDtypeStruct(shape, jnp.float64) for shape in variables.shapes
     ]
-    analysis = analyse(flat, variable_avals, params.avals, options.split_sums)
+    analysis = analyse(flat, variable_avals, params.avals, options.split_sums, is_dense)
     terms = request_terms(analysis, builder)
     affine = None
     if analysis.affine is not None:
@@ -559,38 +581,44 @@ def request_terms(
     """Starts building the programs of the nonlinear terms of an analysis."""
     # A term of `rows` is the function of one row, so its value is a scalar.
     return tuple(
-        builder.request(
-            term, term_signature(term, () if term.gather else analysis.shape)
-        )
-        for term in analysis.nonlinear
+        builder.request(term, term_signature(term, () if term.gather else shape))
+        for term, shape in zip(analysis.nonlinear, analysis.cut_shapes, strict=True)
     )
 
 
 def sparse_affine_function(
     analysis: Analysis, variables: VariableLayout, params: ParamsLayout
 ) -> AffineFunction:
-    """Returns a function from parameter leaves to the constants and Jacobian of the affine part.
+    """Returns a function from parameter leaves to the constants and Jacobian of the remainder.
 
-    The affine part is exact at any point, so it is linearized at zero. ASDEX finds which
-    entries of the Jacobian can be nonzero and colors its columns once, so a solve only
-    evaluates one derivative per color. The values of the entries depend on the parameters.
+    The remainder is exact at any point, so it is linearized at zero, with respect to the
+    entries of the cuts and then the variables. ASDEX finds which entries of the Jacobian can
+    be nonzero and colors its columns once, so a solve only evaluates one derivative per
+    color. The values of the entries depend on the parameters.
     """
-    affine = analysis.affine
-    assert affine is not None
-    zeros = jnp.zeros(variables.size)
+    remainder = analysis.affine
+    assert remainder is not None
+    sizes = [math.prod(shape) for shape in analysis.cut_shapes]
+    offsets = np.concatenate([[0], np.cumsum(sizes)]).astype(int)
+    zeros = jnp.zeros(int(offsets[-1]) + variables.size)
     sample = [jnp.zeros(aval.shape, aval.dtype) for aval in params.avals]
 
-    def value(x: Array, leaves: Sequence[Array]) -> Array:
+    def value(z: Array, leaves: Sequence[Array]) -> Array:
+        cuts = [
+            z[offsets[index] : offsets[index + 1]].reshape(shape)
+            for index, shape in enumerate(analysis.cut_shapes)
+        ]
+        x = z[offsets[-1] :]
         parts = [
             x[offset : offset + math.prod(shape)].reshape(shape)
             for offset, shape in zip(variables.offsets, variables.shapes, strict=True)
         ]
         return evaluate_term(
-            affine, analysis.shape, analysis.constants, parts, leaves
+            remainder, analysis.shape, analysis.constants, parts, leaves, cuts
         ).ravel()
 
     with warnings.catch_warnings():
-        # A dense affine part, such as a matrix product, is correct and costs what the
+        # A dense remainder, such as a matrix product, is correct and costs what the
         # dense derivative would, so the warning about the missing speedup is no use here.
         warnings.simplefilter("ignore", asdex.DenseColoringWarning)
         coloring = asdex.jacobian_coloring(value, zeros, sample, argnums=0)
@@ -666,8 +694,8 @@ def term_rows(
     variables: VariableLayout,
     param_leaves: Sequence[np.ndarray],
 ) -> tuple[Int[np.ndarray, "rows n"], Float[np.ndarray, "rows m"]]:
-    """Returns the input indices and the parameter values of a term in every row of a block."""
-    rows = block.rows
+    """Returns the input indices and the parameter values of each entry of a cut."""
+    rows = compiled.entries
     index_parts, param_parts = input_parts(
         compiled, block, variables, param_leaves, rows
     )
@@ -701,24 +729,49 @@ def block_inputs(
 def linear_rows(
     block: Block, variables: VariableLayout, param_leaves: Sequence[np.ndarray]
 ) -> LinearRows:
-    """Returns the constants and the nonzero coefficients of the affine part of a block."""
+    """Returns the constants and the nonzero coefficients of the remainder of a block.
+
+    The coefficients of the variables and those of the cut entries are separate matrices.
+    """
     rows = block.rows
+    empty_pointers = np.zeros(rows + 1, np.intp)
     if block.affine is None:
+        # The only cut is the output, so each row is one entry of it.
         return LinearRows(
             np.zeros(rows),
-            np.zeros(rows + 1, np.intp),
+            empty_pointers,
             np.zeros(0, np.intc),
             np.zeros(0),
+            np.arange(rows + 1, dtype=np.intp),
+            np.arange(rows, dtype=np.intc),
+            np.ones(rows),
         )
     entries = block.affine(param_leaves)
+    num_cuts = sum(math.prod(shape) for shape in block.analysis.cut_shapes)
     used = entries.values != 0.0
-    entry_rows, columns = entries.rows[used], entries.columns[used]
-    order = np.argsort(entry_rows, kind="stable")
-    pointers = np.zeros(rows + 1, np.intp)
-    np.cumsum(np.bincount(entry_rows, minlength=rows), out=pointers[1:])
+    split = entries.columns < num_cuts
+
+    def matrix(
+        selected: np.ndarray, shift: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        entry_rows = entries.rows[selected]
+        order = np.argsort(entry_rows, kind="stable")
+        pointers = np.zeros(rows + 1, np.intp)
+        np.cumsum(np.bincount(entry_rows, minlength=rows), out=pointers[1:])
+        return (
+            pointers,
+            (entries.columns[selected] - shift)[order].astype(np.intc),
+            entries.values[selected][order],
+        )
+
+    pointers, indices, coefficients = matrix(used & ~split, num_cuts)
+    cut_pointers, cut_columns, cut_coefficients = matrix(used & split, 0)
     return LinearRows(
         constants=entries.constants,
         pointers=pointers,
-        indices=columns[order].astype(np.intc),
-        coefficients=entries.values[used][order],
+        indices=indices,
+        coefficients=coefficients,
+        cut_pointers=cut_pointers,
+        cut_columns=cut_columns,
+        cut_coefficients=cut_coefficients,
     )
