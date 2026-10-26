@@ -4,6 +4,13 @@ Every row becomes a function of the variables it reads. Rows whose functions hav
 expression tree, up to their numbers, form one `BatchedConstraint`, so they share compiled
 programs and differ only in their inputs and parameters. Numbers become parameters, except
 exponents, which stay in the code because the relaxation of `x ** a` depends on `a`.
+
+The monomials of a row are grouped by their exponents, and each group is one gathered
+product over all of its monomials. A group of trilinear terms becomes
+`w * x[a] * x[b] * x[c]` with index arrays `a`, `b` and `c`, which compiles far faster than
+one product per monomial. A variable that appears with an exponent above one is written as
+a power, because a repeated variable in a gathered product would relax as two different
+factors.
 """
 
 import math
@@ -17,6 +24,9 @@ import numpy as np
 from osil import Instance, Node, Row, UnsupportedInstance
 
 import jaxcip as jcp
+
+REDUCTION_WIDTH = 4
+"""Number of factors from which a group of monomials multiplies its factors as a reduction."""
 
 INFINITY = 1e20
 """Bounds at or beyond this magnitude are infinite, as in SCIP."""
@@ -56,15 +66,55 @@ VARIADIC: dict[str, Function] = {
 """OSnL operators of any number of operands."""
 
 
+class MonomialGroup(NamedTuple):
+    """Monomials of one row that have the same exponents."""
+
+    exponents: tuple[int, ...]
+    """The exponent of each factor, largest first."""
+    positions: tuple[tuple[int, ...], ...]
+    """For each monomial, the local position of the variable of each factor."""
+
+
 class Shape(NamedTuple):
-    """The structure of a row: its tree with variables and parameters numbered."""
+    """The structure of a row: its monomials and its tree with variables numbered."""
 
     linear: tuple[int, ...]
     """Local positions of the linear terms."""
-    quadratic: tuple[tuple[int, int], ...]
-    """Local positions of the factors of the quadratic terms."""
+    has_constant: bool
+    """Whether the row has a constant, which is the first parameter after the linear ones."""
+    groups: tuple[MonomialGroup, ...]
+    """Groups of monomials of degree two and higher, which follow the constant."""
     tree: Any
-    """The tree as nested tuples, with exponents kept and other numbers left out."""
+    """The rest as nested tuples, with exponents kept and other numbers left out."""
+
+
+class Monomial(NamedTuple):
+    """A coefficient times variables raised to integer powers."""
+
+    coefficient: float
+    powers: dict[int, int]
+    """The exponent of each variable index."""
+
+    @property
+    def degree(self) -> int:
+        """Sum of the exponents."""
+        return sum(self.powers.values())
+
+    def times(self, other: "Monomial") -> "Monomial":
+        """Returns the product of two monomials."""
+        powers = dict(self.powers)
+        for index, exponent in other.powers.items():
+            powers[index] = powers.get(index, 0) + exponent
+        return Monomial(self.coefficient * other.coefficient, powers)
+
+    def raised(self, exponent: int) -> "Monomial":
+        """Returns the monomial to a non-negative integer power."""
+        return Monomial(
+            self.coefficient**exponent,
+            {index: power * exponent for index, power in self.powers.items()}
+            if exponent
+            else {},
+        )
 
 
 class Group(NamedTuple):
@@ -144,21 +194,161 @@ def evaluate_tree(shape: Any, x: jax.Array, params: Iterator[jax.Array]) -> jax.
     raise UnsupportedInstance(f"tree shape {shape}")
 
 
+def as_monomial(node: Node) -> Monomial | None:
+    """Returns a tree as a monomial, or `None` if it is not a product of powers of variables."""
+    match node:
+        case Node("number", value=value):
+            return Monomial(value, {})
+        case Node("variable", value=value, index=index):
+            return Monomial(value, {index: 1})
+        case Node("negate", (operand,)):
+            inner = as_monomial(operand)
+            return None if inner is None else Monomial(-inner.coefficient, inner.powers)
+        case Node("square", (operand,)):
+            inner = as_monomial(operand)
+            return None if inner is None else inner.raised(2)
+        case Node("power", (base, Node("number", value=exponent))) if (
+            exponent == int(exponent) and exponent >= 0
+        ):
+            inner = as_monomial(base)
+            return None if inner is None else inner.raised(int(exponent))
+        case Node("divide", (numerator, Node("number", value=divisor))) if divisor != 0:
+            inner = as_monomial(numerator)
+            if inner is None:
+                return None
+            return Monomial(inner.coefficient / divisor, inner.powers)
+        case Node("times" | "product", operands):
+            product = Monomial(1.0, {})
+            for operand in operands:
+                factor = as_monomial(operand)
+                if factor is None:
+                    return None
+                product = product.times(factor)
+            return product
+        case _:
+            return None
+
+
+def signed_terms(node: Node, sign: float = 1.0) -> Iterator[tuple[float, Node]]:
+    """Yields the terms of the sums at the top of a tree with their signs."""
+    match node:
+        case Node("sum" | "plus", operands):
+            for operand in operands:
+                yield from signed_terms(operand, sign)
+        case Node("minus", (first, second)):
+            yield from signed_terms(first, sign)
+            yield from signed_terms(second, -sign)
+        case Node("negate", (operand,)):
+            yield from signed_terms(operand, -sign)
+        case _:
+            yield sign, node
+
+
+class Decomposition(NamedTuple):
+    """A row split into its linear terms, constant, higher-degree monomials and the rest."""
+
+    linear: list[tuple[int, float]]
+    """Pairs of a variable index and its coefficient."""
+    constant: float
+    monomials: list[Monomial]
+    tree: Node | None
+    """The terms that are not monomials, or `None` if there are none."""
+
+
+def decompose(row: Row) -> Decomposition:
+    """Splits a row by degree, taking its monomials out of the top-level sums of its tree."""
+    linear = [
+        (int(index), float(value))
+        for index, value in zip(row.linear_indices, row.linear_values, strict=True)
+    ]
+    constant = 0.0
+    # Multiplying merges the exponents, so a square comes out as one variable to the power 2.
+    monomials = [
+        Monomial(coefficient, {first: 1}).times(Monomial(1.0, {second: 1}))
+        for first, second, coefficient in row.quadratic
+    ]
+    rest: list[Node] = []
+    terms = [] if row.tree is None else list(signed_terms(row.tree))
+    for sign, term in terms:
+        monomial = as_monomial(term)
+        if monomial is None:
+            rest.append(term if sign > 0 else Node("negate", (term,)))
+            continue
+        scaled = Monomial(sign * monomial.coefficient, monomial.powers)
+        match scaled.degree:
+            case 0:
+                constant += scaled.coefficient
+            case 1:
+                ((index, _),) = scaled.powers.items()
+                linear.append((index, scaled.coefficient))
+            case _:
+                monomials.append(scaled)
+    tree = None if not rest else rest[0] if len(rest) == 1 else Node("sum", tuple(rest))
+    return Decomposition(linear, constant, monomials, tree)
+
+
+def group_monomials(
+    monomials: list[Monomial], positions: dict[int, int]
+) -> tuple[tuple[MonomialGroup, ...], list[float]]:
+    """Groups monomials by exponents and returns the groups with their coefficients.
+
+    The factors of a monomial are ordered by exponent, largest first, then by position,
+    and the monomials of a group are ordered by their positions, so that rows with the same
+    structure get equal groups.
+    """
+    grouped: dict[tuple[int, ...], list[tuple[tuple[int, ...], float]]] = {}
+    for monomial in monomials:
+        factors = sorted(
+            (-exponent, positions[index]) for index, exponent in monomial.powers.items()
+        )
+        exponents = tuple(-exponent for exponent, _ in factors)
+        where = tuple(position for _, position in factors)
+        grouped.setdefault(exponents, []).append((where, monomial.coefficient))
+    groups = []
+    coefficients: list[float] = []
+    for exponents in sorted(grouped, reverse=True):
+        members = sorted(grouped[exponents])
+        groups.append(MonomialGroup(exponents, tuple(where for where, _ in members)))
+        coefficients += [coefficient for _, coefficient in members]
+    return tuple(groups), coefficients
+
+
 def row_function(shape: Shape) -> Callable[[jax.Array, jax.Array], jax.Array]:
     """Returns the function `f(x, params)` of the rows of a shape."""
     num_linear = len(shape.linear)
-    num_quadratic = len(shape.quadratic)
+    num_constant = int(shape.has_constant)
+    num_monomials = sum(len(group.positions) for group in shape.groups)
+    start = num_linear + num_constant
 
     def function(x: jax.Array, params: jax.Array) -> jax.Array:
         total = jnp.zeros((), x.dtype)
         if num_linear:
             total += jnp.dot(params[:num_linear], x[jnp.array(shape.linear)])
-        if num_quadratic:
-            first, second = (jnp.array(item) for item in zip(*shape.quadratic))
-            coefficients = params[num_linear : num_linear + num_quadratic]
-            total += jnp.sum(coefficients * x[first] * x[second])
+        if num_constant:
+            total += params[num_linear]
+        offset = start
+        for group in shape.groups:
+            count = len(group.positions)
+            gathered = np.array(group.positions)
+            columns = [
+                x[gathered[:, column]] ** exponent
+                if exponent > 1
+                else x[gathered[:, column]]
+                for column, exponent in enumerate(group.exponents)
+            ]
+            coefficients = params[offset : offset + count]
+            if len(columns) < REDUCTION_WIDTH:
+                term = coefficients
+                for column in columns:
+                    term = term * column
+            else:
+                # A chain of products compiles slowly, so wide products are one reduction,
+                # which JAXormick relaxes in logarithmically many levels.
+                term = coefficients * jnp.prod(jnp.stack(columns, axis=1), axis=1)
+            total += jnp.sum(term)
+            offset += count
         if shape.tree is not None:
-            rest = params[num_linear + num_quadratic :]
+            rest = params[start + num_monomials :]
             # Static indices, since iterating over more than 100 entries traces a loop.
             numbers = (rest[index] for index in range(rest.shape[0]))
             total += evaluate_tree(shape.tree, x, numbers)
@@ -169,21 +359,25 @@ def row_function(shape: Shape) -> Callable[[jax.Array, jax.Array], jax.Array]:
 
 def row_shape(row: Row) -> tuple[Shape, list[int], list[float]]:
     """Returns the shape of a row with its variable indices and parameters."""
-    indices = list(row.linear_indices)
-    for first, second, _ in row.quadratic:
-        indices += [first, second]
-    if row.tree is not None:
-        indices += list(variables_of(row.tree))
+    parts = decompose(row)
+    indices = [index for index, _ in parts.linear]
+    for monomial in parts.monomials:
+        indices += list(monomial.powers)
+    if parts.tree is not None:
+        indices += list(variables_of(parts.tree))
     variables = sorted(set(int(index) for index in indices))
     positions = {index: position for position, index in enumerate(variables)}
-    params = [float(value) for value in row.linear_values]
-    params += [coefficient for _, _, coefficient in row.quadratic]
-    tree = None if row.tree is None else tree_shape(row.tree, positions, params)
+    params = [value for _, value in parts.linear]
+    has_constant = parts.constant != 0.0
+    if has_constant:
+        params.append(parts.constant)
+    groups, coefficients = group_monomials(parts.monomials, positions)
+    params += coefficients
+    tree = None if parts.tree is None else tree_shape(parts.tree, positions, params)
     shape = Shape(
-        linear=tuple(positions[int(index)] for index in row.linear_indices),
-        quadratic=tuple(
-            (positions[first], positions[second]) for first, second, _ in row.quadratic
-        ),
+        linear=tuple(positions[index] for index, _ in parts.linear),
+        has_constant=has_constant,
+        groups=groups,
         tree=tree,
     )
     return shape, variables, params

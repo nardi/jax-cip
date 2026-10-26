@@ -4,7 +4,9 @@ The suite in `tests/minlplib` solves each [MINLPLib](https://www.minlplib.org/)
 instance twice. Native SCIP reads the OSiL file with its own reader and builds its own
 expressions. JAX-CIP converts the same file into a [`Problem`][jaxcip.Problem] with one
 JAX function per nonlinear row, and SCIP sees each term of a function as one opaque
-expression. The suite then checks that:
+expression. The converter groups the monomials of a row by their exponents and writes
+each group as one product over gathered variables. A row with 24 cubic terms then
+compiles its convex program in 0.2 seconds instead of 9.4. The suite then checks that:
 
 - an optimal objective equals the known optimum from `minlplib.solu`, or native SCIP's
   when MINLPLib knows none,
@@ -44,9 +46,10 @@ dual bounds stall without it.
 - `clay0203m` and `st_e05` stop with SCIP's LP error -6, which native SCIP does not hit
   on the same instances.
 - `ghg_1veh` takes 411 seconds to build its programs, most of them for its 127 rows with
-  products. The rows of the `cvxnonsep_nsig*` and `cvxnonsep_psig40` instances, with up to
-  40 factors, take 21 to 29 seconds. The converter writes a product as one `jnp.prod`,
-  which JAXormick relaxes in log₂ n levels. A chain of `*` takes minutes and gigabytes to
+  products, which multiply an exponential by a sum and so are not monomials. The rows of
+  the `cvxnonsep_nsig*` and `cvxnonsep_psig40` instances, with up to 40 factors, take 21 to
+  29 seconds. The converter multiplies four or more factors as one `jnp.prod`, which
+  JAXormick relaxes in log₂ n levels. A chain of `*` takes minutes and gigabytes to
   compile at 30 factors.
 - A problem with hundreds of distinct terms can reach Linux's limit on memory mappings,
   as [Performance](performance.md#build-time) describes.
