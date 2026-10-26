@@ -74,7 +74,7 @@ for name, counters in first.statistics._asdict().items():
 
 <!-- name: test_performance -->
 ```python
-assert first.statistics.estimate.calls > 0
+assert first.statistics.initestimates.calls > 0
 ```
 
 One program run on the CPU plugin takes a few microseconds for a small term. When the
