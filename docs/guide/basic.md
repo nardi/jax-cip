@@ -104,7 +104,9 @@ and `gap` the relative distance between them. `x` is `None` when SCIP found no s
 
 A function may use anything that `jax.make_jaxpr` traces and JAXormick relaxes. That
 covers `jax.numpy` arithmetic and elementary functions, reductions, indexing,
-`lax.fori_loop`, `lax.scan`, `lax.cond` and linear solves. The [supported operations of
+`lax.fori_loop`, `lax.scan`, `lax.cond`, linear solves and roots from `lax.custom_root`.
+[Roots and warm starts](../theory/jax.md#roots-and-warm-starts) lists what to watch for
+with roots. The [supported operations of
 JAXormick](https://nardi.github.io/jaxormick/guide/supported/) list the rest. Functions
 receive integer and binary variables as floats, so `x.units[0] * x.flow[1]` is a product
 of two floats.

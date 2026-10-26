@@ -100,6 +100,38 @@ match bit for bit. `EVAL` also runs the value and gradient program, so the gradi
 SCIP asks for next is already there. You can switch each of these off in
 [`HandlerOptions`][jaxcip.HandlerOptions] to measure what it gains.
 
+## Roots and warm starts
+
+A term can contain `lax.custom_root`, which defines a value \(y(p)\) by the equation
+\(r(p, y) = 0\) and a solver. JAXormick relaxes the root by proving, with the Krawczyk
+operator, that the equation has exactly one solution on the box. The value and derivative
+programs run the solver itself.
+
+Newton's method needs a step or two when it starts close to the root, so the handler
+passes the root of the previous run as the next guess. Each expression keeps its own
+roots, and the gradient program returns them as a third output. The Hessian-vector program
+takes them as an input. Entries that no run has set use the guess written in the term. For
+a system of 12 unknowns, a run takes 68 µs when \(x\) repeats and 125 µs when \(x\) moves a
+little, against 200 µs from the written guess.
+
+- A Newton step after the solver gives the same root to machine precision from every
+  guess, so values that SCIP compares do not depend on the order of the callbacks. That
+  step has no derivative, because `lax.custom_root` takes derivatives from the implicit
+  function theorem.
+- Only roots at the top level of a term take a warm start. A root inside `jax.jit`, a loop
+  or a branch keeps its own guess.
+- The root must be unique. JAXormick proves that on every box for the relaxations, but the
+  value programs do not check it. With several roots, the guess picks one, and the value
+  and the relaxations can disagree.
+- The PJRT plugin has no LAPACK, so a solver that calls `jnp.linalg.solve` or
+  `jnp.linalg.inv` does not compile. A solver can write its linear algebra with
+  elementwise operations and `lax.fori_loop`.
+- JAXormick has no rule for the gradient of a root, so the term has no gradient interval
+  program and SCIP treats its monotonicity as unknown.
+- The Krawczyk operator only verifies a root on a box that is small compared with the
+  nonlinearity of the equation. On a wider box the relaxations are infinite, which is
+  valid but gives SCIP nothing until branching shrinks the box.
+
 ## Cost of an opaque term
 
 SCIP's own expressions expose structure that a JAX term hides. SCIP's nonlinear handlers

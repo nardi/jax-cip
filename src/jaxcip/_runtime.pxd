@@ -15,7 +15,7 @@ from jaxcip._pjrt cimport (
 cdef enum:
     ALIGNMENT = 64
     MAX_INPUTS = 4
-    MAX_OUTPUTS = 2
+    MAX_OUTPUTS = 3
 
 
 cdef struct ProgramSpec:

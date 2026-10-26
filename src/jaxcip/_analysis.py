@@ -453,7 +453,15 @@ def evaluate_term(
 
 def sum_outputs(term: Term, shape: tuple[int, ...], arguments: Sequence[Any]) -> Array:
     """Returns `Σ sign · output` of a term's jaxpr applied to its inputs."""
-    outputs = jaxpr_as_fun(ClosedJaxpr(term.jaxpr, []))(*arguments)
+    return combine_outputs(
+        term, shape, jaxpr_as_fun(ClosedJaxpr(term.jaxpr, []))(*arguments)
+    )
+
+
+def combine_outputs(
+    term: Term, shape: tuple[int, ...], outputs: Sequence[Any]
+) -> Array:
+    """Returns `Σ sign · output` for the outputs of a term's jaxpr."""
     total = jnp.zeros(shape, jnp.float64)
     for sign, output in zip(term.signs, outputs, strict=True):
         total = total + sign * jnp.broadcast_to(jnp.asarray(output, jnp.float64), shape)

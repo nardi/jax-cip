@@ -267,6 +267,7 @@ def execute(
     results: cython.pointer[PJRT_Buffer][MAX_OUTPUTS]
     results[0] = cython.NULL
     results[1] = cython.NULL
+    results[2] = cython.NULL
     result_list: cython.pointer[cython.pointer[PJRT_Buffer]] = results
     argument_list: cython.pointer[cython.pointer[PJRT_Buffer]] = arguments
     complete: cython.pointer[PJRT_Event] = cython.NULL

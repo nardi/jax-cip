@@ -73,7 +73,7 @@ from cython.cimports.jaxcip._scip import (
     allocRealArray,
     allocSymData,
 )
-from cython.cimports.libc.math import fabs, isfinite, isnan
+from cython.cimports.libc.math import NAN, fabs, isfinite, isnan
 from cython.cimports.libc.stdint import uintptr_t
 from cython.cimports.libc.stdlib import free, malloc
 from cython.cimports.libc.string import memcmp, memcpy, memset
@@ -106,9 +106,25 @@ PROGRAM_SLOTS: tuple[tuple[int, ...], ...] = (
 """Inputs of each program in the order of `Program`, as the exported functions take them."""
 
 
-def output_sizes(program: Program, num_inputs: int) -> tuple[int, ...]:
-    """Returns the number of doubles in each output of a program."""
+def program_slots(program: Program, state_size: int = 0) -> tuple[int, ...]:
+    """Returns the input slots of a program, which end with the warm start if there is one."""
     match program:
+        case Program.VALUE_AND_GRADIENT | Program.HESSIAN_VECTOR if state_size:
+            return (*PROGRAM_SLOTS[program], SLOT_STATE)
+        case _:
+            return PROGRAM_SLOTS[program]
+
+
+def output_sizes(
+    program: Program, num_inputs: int, state_size: int = 0
+) -> tuple[int, ...]:
+    """Returns the number of doubles in each output of a program.
+
+    With a warm start, the gradient program returns the roots as a third output.
+    """
+    match program:
+        case Program.VALUE_AND_GRADIENT if state_size:
+            return (1, num_inputs, state_size)
         case Program.VALUE_AND_GRADIENT | Program.CONVEX | Program.CONCAVE:
             return (1, num_inputs)
         case Program.HESSIAN_VECTOR:
@@ -160,13 +176,23 @@ def run(
         slot = function.slots[program][index]
         if slot == SLOT_PARAMS:
             inputs[index] = data.params
+        elif slot == SLOT_STATE:
+            inputs[index] = data.state
         else:
             inputs[index] = function.inputs[slot]
     outputs: cython.p_double[MAX_OUTPUTS]
     outputs[0] = first
     outputs[1] = second
+    outputs[2] = data.state_next if spec.num_outputs > 2 else cython.NULL
     start: cython.double = now()
     status: cython.int = execute(spec, inputs, outputs, data.switches.zero_copy)
+    # The roots a run found are the guesses of the next run.
+    if status == 0 and spec.num_outputs > 2:
+        memcpy(
+            data.state.host,
+            data.state_next,
+            function.state_size * cython.sizeof(cython.double),
+        )
     function.statistics.runs[callback] += 1
     function.statistics.seconds[callback] += now() - start
     return status
@@ -206,6 +232,17 @@ def new_expr_data(
     data.params.size = m
     memcpy(data.params.host, params, m * cython.sizeof(cython.double))
     data.params.buffer = alias_buffer(data.params.host, m)
+    # The warm start begins as NaN, which stands for the guess written in the function.
+    k: cython.int = function.state_size
+    index: cython.int
+    if k > 0:
+        data.state.host = aligned_doubles(k)
+        data.state.size = k
+        data.state.buffer = alias_buffer(data.state.host, k)
+        data.state_next = aligned_doubles(k)
+        for index in range(k):
+            data.state.host[index] = NAN
+            data.state_next[index] = NAN
 
     # All caches live in one block, laid out one after another.
     total: cython.size_t = (
@@ -255,6 +292,10 @@ def free_expr_data(data: cython.pointer[ExprData]) -> cython.void:
     """Frees expression data and its parameter buffer."""
     destroy_buffer(data.params.buffer)
     free(data.params.host)
+    if data.function.state_size > 0:
+        destroy_buffer(data.state.buffer)
+        free(data.state.host)
+        free(data.state_next)
     free(data.cache_block)
     free(data)
 
@@ -1178,12 +1219,19 @@ class FunctionHandle:
     """
 
     def __cinit__(
-        self, num_inputs: cython.int, num_params: cython.int, programs: Programs
+        self,
+        num_inputs: cython.int,
+        num_params: cython.int,
+        programs: Programs,
+        state_size: cython.int = 0,
     ) -> None:
         require_runtime()
         if num_inputs < 1:
             raise ValueError("A function needs at least one input")
+        if state_size < 0:
+            raise ValueError("The warm start cannot have a negative size")
         self.num_inputs = num_inputs
+        self.state_size = state_size
         self.num_params = max(num_params, 1)
         self.programs = programs
         function: cython.pointer[Function] = cython.cast(
@@ -1193,6 +1241,7 @@ class FunctionHandle:
         self.function = function
         function.n = num_inputs
         function.m = self.num_params
+        function.state_size = state_size
         function.scratch = aligned_doubles(num_inputs)
         slot: cython.int
         for slot in range(SLOT_PARAMS):
@@ -1211,7 +1260,8 @@ class FunctionHandle:
                 if program not in (Program.HESSIAN_VECTOR, Program.GRADIENT_INTERVAL):
                     raise ValueError(f"The {program.name.lower()} program is required")
                 continue
-            sizes = output_sizes(program, num_inputs)
+            sizes = output_sizes(program, num_inputs, state_size)
+            slots = program_slots(program, state_size)
             if executable.num_outputs != len(sizes):
                 raise ValueError(
                     f"The {program.name.lower()} program has {executable.num_outputs} outputs, "
@@ -1219,8 +1269,8 @@ class FunctionHandle:
                 )
             index = program
             function.programs[index].handle = executable.handle
-            function.programs[index].num_inputs = len(PROGRAM_SLOTS[index])
-            for position, slot in enumerate(PROGRAM_SLOTS[index]):
+            function.programs[index].num_inputs = len(slots)
+            for position, slot in enumerate(slots):
                 function.slots[index][position] = slot
             function.programs[index].num_outputs = len(sizes)
             for position, size in enumerate(sizes):
@@ -1283,6 +1333,62 @@ class FunctionHandle:
             cython.address(view[0]),
         )
         return value, gradient
+
+    def warm_runs(
+        self,
+        x: cython.double[::1],
+        params: cython.double[::1],
+        runs: cython.int,
+        start: object = None,
+    ) -> list[tuple[float, np.ndarray]]:
+        """Runs the gradient program repeatedly on one expression and returns what each run left.
+
+        Every run passes the roots of the run before as the warm start. The first run starts
+        from `start`, or from the guesses written in the function if there is none. The result
+        holds the value and a copy of the warm start after each run.
+        """
+        self.set_input(SLOT_X, x)
+        data: cython.pointer[ExprData] = direct_data(
+            self, params, switches_from(DIRECT_SWITCHES)
+        )
+        if start is not None:
+            initial = np.ascontiguousarray(start, np.float64)
+            check_length("start", initial, self.state_size)
+            first: cython.double[::1] = initial
+            memcpy(
+                data.state.host,
+                cython.address(first[0]),
+                self.state_size * cython.sizeof(cython.double),
+            )
+        value: cython.double = 0.0
+        gradient = np.empty(self.num_inputs)
+        view: cython.double[::1] = gradient
+        state = np.empty(self.state_size)
+        state_view: cython.double[::1] = state
+        results: list[tuple[float, np.ndarray]] = []
+        run_index: cython.int
+        status: cython.int
+        for run_index in range(runs):
+            status = run(
+                data,
+                PROGRAM_VALUE_AND_GRADIENT,
+                cython.address(value),
+                cython.address(view[0]),
+                CALLBACK_EVAL,
+            )
+            # A program fails to run only if the plugin fails.
+            if status != 0:
+                free_expr_data(data)  # pragma: no cover
+                raise_last_error("value_and_gradient")  # pragma: no cover
+            if self.state_size > 0:
+                memcpy(
+                    cython.address(state_view[0]),
+                    data.state.host,
+                    self.state_size * cython.sizeof(cython.double),
+                )
+            results.append((value, state.copy()))
+        free_expr_data(data)
+        return results
 
     def hessian_vector(
         self,

@@ -222,6 +222,7 @@ class HandleBuilder:
             signature.num_inputs,
             signature.num_params,
             Programs._make(built.executables),
+            signature.state_size,
         )
         self.handles[requested.key] = handle
         compiled_terms[requested.key] = handle

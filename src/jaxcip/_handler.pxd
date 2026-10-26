@@ -10,14 +10,15 @@ cdef enum:
 
 
 # Inputs of the programs. Every expression of a function shares the host arrays of all slots
-# but the parameters, which each expression owns.
+# but the parameters and the warm start of roots, which each expression owns.
 cdef enum:
     SLOT_X = 0
     SLOT_DIRECTION = 1
     SLOT_LOWER = 2
     SLOT_UPPER = 3
     SLOT_PARAMS = 4
-    NUM_SLOTS = 5
+    SLOT_STATE = 5
+    NUM_SLOTS = 6
 
 
 # The programs of a function, with the values of `jaxcip._types.Program`.
@@ -67,6 +68,7 @@ cdef struct Function:
     # The programs of one function structure and the host inputs its expressions share.
     int n
     int m
+    int state_size
     ProgramSpec programs[NUM_PROGRAMS]
     int slots[NUM_PROGRAMS][MAX_INPUTS]
     Input inputs[NUM_SLOTS]
@@ -79,6 +81,8 @@ cdef struct ExprData:
     Function* function
     Switches switches
     Input params
+    Input state
+    double* state_next
     double* cache_block
     double* value_keys
     double* value_results
@@ -116,4 +120,5 @@ cdef class FunctionHandle:
     cdef Function* function
     cdef readonly int num_inputs
     cdef readonly int num_params
+    cdef readonly int state_size
     cdef readonly object programs

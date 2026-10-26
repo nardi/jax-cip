@@ -6,6 +6,7 @@ python.install_sources(
   '_options.py',
   '_problem_types.py',
   '_programs.py',
+  '_roots.py',
   '_scip_parameters.py',
   '_solve.py',
   '_types.py',

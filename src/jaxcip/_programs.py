@@ -15,12 +15,30 @@ import jaxormick as jmk
 from jax.extend.core import Jaxpr
 from jaxtyping import Array, Float
 
-from jaxcip._analysis import Origin, Term, dtype_of, shape_of, sum_outputs
+from jaxcip._analysis import (
+    Origin,
+    Term,
+    combine_outputs,
+    dtype_of,
+    shape_of,
+    sum_outputs,
+)
 from jaxcip._options import RelaxationOptions
+from jaxcip._roots import evaluate_with_state, state_size
 from jaxcip._types import Program
 
 TermFunction = Callable[[Float[Array, " n"], Float[Array, " m"]], Float[Array, ""]]
 """A scalar function `f(x, params)` of two flat vectors."""
+
+StatefulFunction = Callable[
+    [Float[Array, " n"], Float[Array, " m"], Float[Array, " k"]],
+    tuple[Float[Array, ""], Float[Array, " k"]],
+]
+"""A scalar function `f(x, params, state)` that also returns the roots it found.
+
+The warm start `state` holds a guess for each root of the term, and NaN entries use the
+guess written in the term. The roots come back in the same layout.
+"""
 
 
 class LoweredProgram(NamedTuple):
@@ -78,6 +96,8 @@ class TermSignature(NamedTuple):
     """Length of the flat variable vector."""
     num_params: int
     """Length of the flat parameter vector, at least one."""
+    state_size: int = 0
+    """Length of the warm start of the term's roots, or 0 if it has none."""
 
     @property
     def num_entries(self) -> int:
@@ -98,7 +118,37 @@ def term_signature(term: Term, shape: tuple[int, ...]) -> TermSignature:
     num_inputs = sum(item.size for item in inputs if item.is_variable)
     num_params = sum(item.size for item in inputs if not item.is_variable)
     num_params += int(math.prod(shape) > 1)
-    return TermSignature(inputs, shape, num_inputs, max(num_params, 1))
+    return TermSignature(
+        inputs, shape, num_inputs, max(num_params, 1), state_size(term.jaxpr)
+    )
+
+
+def term_arguments(
+    signature: TermSignature, x: Float[Array, " n"], params: Float[Array, " m"]
+) -> tuple[list[Array], int]:
+    """Returns the arguments of a term's jaxpr from the flat vectors and the parameters used."""
+    arguments: list[Array] = []
+    variable_offset = 0
+    param_offset = 0
+    for item in signature.inputs:
+        if item.is_variable:
+            part = x[variable_offset : variable_offset + item.size]
+            variable_offset += item.size
+        else:
+            part = params[param_offset : param_offset + item.size]
+            param_offset += item.size
+        arguments.append(part.reshape(item.shape).astype(item.dtype))
+    return arguments, param_offset
+
+
+def select_entry(
+    total: Array, signature: TermSignature, params: Float[Array, " m"], offset: int
+) -> Float[Array, ""]:
+    """Returns the entry of a term's value that the parameter at `offset` selects, if any."""
+    if signature.num_entries == 1:
+        return total.reshape(())
+    index = params[offset].astype(jnp.int32)
+    return jax.lax.dynamic_index_in_dim(total, index, keepdims=False)
 
 
 def term_function(term: Term, signature: TermSignature) -> TermFunction:
@@ -108,30 +158,38 @@ def term_function(term: Term, signature: TermSignature) -> TermFunction:
     """
 
     def evaluate(x: Float[Array, " n"], params: Float[Array, " m"]) -> Float[Array, ""]:
-        arguments: list[Array] = []
-        variable_offset = 0
-        param_offset = 0
-        for item in signature.inputs:
-            if item.is_variable:
-                part = x[variable_offset : variable_offset + item.size]
-                variable_offset += item.size
-            else:
-                part = params[param_offset : param_offset + item.size]
-                param_offset += item.size
-            arguments.append(part.reshape(item.shape).astype(item.dtype))
+        arguments, offset = term_arguments(signature, x, params)
         total = sum_outputs(term, signature.shape, arguments).ravel()
-        if signature.num_entries == 1:
-            return total.reshape(())
-        index = params[param_offset].astype(jnp.int32)
-        return jax.lax.dynamic_index_in_dim(total, index, keepdims=False)
+        return select_entry(total, signature, params, offset)
+
+    return evaluate
+
+
+def stateful_term_function(term: Term, signature: TermSignature) -> StatefulFunction:
+    """Returns the scalar function of one entry of a term whose roots take a warm start."""
+
+    def evaluate(
+        x: Float[Array, " n"], params: Float[Array, " m"], state: Float[Array, " k"]
+    ) -> tuple[Float[Array, ""], Float[Array, " k"]]:
+        arguments, offset = term_arguments(signature, x, params)
+        outputs, roots = evaluate_with_state(term.jaxpr, arguments, state)
+        total = combine_outputs(term, signature.shape, outputs).ravel()
+        return select_entry(total, signature, params, offset), roots
 
     return evaluate
 
 
 def program_functions(
-    function: TermFunction, options: RelaxationOptions
+    function: TermFunction,
+    options: RelaxationOptions,
+    stateful: StatefulFunction | None = None,
 ) -> tuple[Callable[..., Any], ...]:
-    """Returns the six programs of a scalar function in the order of `Program`."""
+    """Returns the six programs of a scalar function in the order of `Program`.
+
+    With a `stateful` version of the function, the gradient and Hessian-vector programs take
+    the warm start of its roots as their last input, and the gradient program also returns
+    the roots it found.
+    """
     mode = options.mode.value
 
     def hessian_vector(
@@ -140,9 +198,30 @@ def program_functions(
         gradient = jax.grad(function)
         return jax.jvp(lambda y: gradient(y, params), (x,), (direction,))[1]
 
+    def stateful_hessian_vector(
+        x: Float[Array, " n"],
+        direction: Float[Array, " n"],
+        params: Float[Array, " m"],
+        state: Float[Array, " k"],
+    ) -> Float[Array, " n"]:
+        assert stateful is not None
+        gradient = jax.grad(lambda y: stateful(y, params, state)[0])
+        return jax.jvp(gradient, (x,), (direction,))[1]
+
+    def stateful_value_and_gradient(
+        x: Float[Array, " n"], params: Float[Array, " m"], state: Float[Array, " k"]
+    ) -> tuple[Float[Array, ""], Float[Array, " n"], Float[Array, " k"]]:
+        assert stateful is not None
+        (value, roots), gradient = jax.value_and_grad(stateful, has_aux=True)(
+            x, params, state
+        )
+        return value, gradient, roots
+
     return (
-        jax.value_and_grad(function),
-        hessian_vector,
+        jax.value_and_grad(function)
+        if stateful is None
+        else stateful_value_and_gradient,
+        hessian_vector if stateful is None else stateful_hessian_vector,
         jmk.convex_side(
             function,
             mode,
@@ -161,16 +240,17 @@ def program_functions(
 
 
 def program_shapes(
-    program: Program, num_inputs: int, num_params: int
+    program: Program, num_inputs: int, num_params: int, state_size: int = 0
 ) -> tuple[jax.ShapeDtypeStruct, ...]:
     """Returns the shapes of the arguments of a program."""
     vector = jax.ShapeDtypeStruct((num_inputs,), jnp.float64)
     params = jax.ShapeDtypeStruct((num_params,), jnp.float64)
+    state = (jax.ShapeDtypeStruct((state_size,), jnp.float64),) if state_size else ()
     match program:
         case Program.VALUE_AND_GRADIENT:
-            return (vector, params)
+            return (vector, params, *state)
         case Program.HESSIAN_VECTOR:
-            return (vector, vector, params)
+            return (vector, vector, params, *state)
         case Program.CONVEX | Program.CONCAVE:
             return (vector, vector, vector, params)
         case Program.INTERVAL | Program.GRADIENT_INTERVAL:
@@ -220,12 +300,15 @@ def lower_programs(
     An optional program that cannot be lowered is left out. A required one raises.
     """
     function = term_function(term, signature)
+    stateful = stateful_term_function(term, signature) if signature.state_size else None
     lowered: list[LoweredProgram | None] = []
     skipped: list[str] = []
     for program, program_function in zip(
-        Program, program_functions(function, options.relaxation), strict=True
+        Program, program_functions(function, options.relaxation, stateful), strict=True
     ):
-        shapes = program_shapes(program, signature.num_inputs, signature.num_params)
+        shapes = program_shapes(
+            program, signature.num_inputs, signature.num_params, signature.state_size
+        )
         reason = is_wanted(program, options, term.jaxpr)
         if reason is None:
             try:
