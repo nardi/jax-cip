@@ -28,6 +28,10 @@ class HandlerOptions(NamedTuple):
     """Whether SCIP gets exact Hessian-vector products of each function."""
     zero_copy: bool = True
     """Whether executions read and write host memory directly when the plugin allows it."""
+    prefetch: bool = True
+    """Whether the first entry of a block that needs a run fills the inputs of all entries.
+
+    The run then answers the callbacks of the other entries at the same point or box."""
 
 
 class RelaxationMode(Enum):

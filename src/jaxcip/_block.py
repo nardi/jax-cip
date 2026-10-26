@@ -79,6 +79,7 @@ from cython.cimports.jaxcip._scip import (
     ExprIntevalVar,
     SCIP_Bool,
     SCIP_Real,
+    SCIP_VAR,
     SCIPcreateExpr,
     SCIPevalExprActivity,
     SCIPexprGetActivity,
@@ -101,8 +102,13 @@ from cython.cimports.jaxcip._scip import (
     SCIPexprSetData,
     SCIPfeastol,
     SCIPfindExprhdlr,
+    SCIPgetSolVal,
+    SCIPgetVarExprVar,
     SCIPincludeExprhdlr,
     SCIPisInfinity,
+    SCIPisExprVar,
+    SCIPvarGetLbLocal,
+    SCIPvarGetUbLocal,
     allocExprArray,
     allocRealArray,
     allocSymData,
@@ -261,6 +267,10 @@ def new_block_state(
         function.m * cython.sizeof(cython.double),
     )
     state.scratch = aligned_doubles(function.n)
+    state.variables = cython.cast(
+        cython.pointer[cython.pointer[SCIP_VAR]],
+        calloc(function.n, cython.sizeof(cython.pointer[SCIP_VAR])),
+    )
     program: cython.int
     slots: cython.int
     for program in range(NUM_PROGRAMS):
@@ -295,6 +305,7 @@ def release_block_state(state: cython.pointer[BlockState]) -> cython.void:
         free(state.caches[program].first)
         free(state.caches[program].second)
     free(state.scratch)
+    free(state.variables)
     free(state)
 
 
@@ -385,6 +396,100 @@ def entry_matches(
 
 
 @cython.cfunc
+@cython.inline
+@cython.nogil
+@cython.exceptval(check=False)
+def new_request(
+    scip: cython.pointer[SCIP], sol: cython.pointer[SCIP_SOL], kind: cython.int
+) -> Prefetch:
+    """Returns a request to fill the inputs of a block from the state of SCIP."""
+    request: Prefetch
+    request.scip = scip
+    request.sol = sol
+    request.kind = kind
+    request.intevalvar = cython.NULL
+    request.intevalvardata = cython.NULL
+    return request
+
+
+@cython.cfunc
+@cython.nogil
+@cython.exceptval(check=False)
+def record_variables(
+    scip: cython.pointer[SCIP],
+    expr: cython.pointer[SCIP_EXPR],
+    data: cython.pointer[BlockData],
+) -> cython.void:
+    """Remembers the variables that the children of an entry are, so that a run can fill their inputs.
+
+    The state learns the variables of the block entry by entry, in this instance of SCIP, whose
+    variables may differ from those the block was built with. A child that is not a variable
+    leaves its input unknown, and a run then does not set it.
+    """
+    state: cython.pointer[BlockState] = data.state
+    function: cython.pointer[BlockFunction] = state.function
+    children: cython.pointer[cython.pointer[SCIP_EXPR]] = SCIPexprGetChildren(expr)
+    index: cython.int
+    for index in range(SCIPexprGetNChildren(expr)):
+        state.variables[function.columns[function.pointers[data.entry] + index]] = (
+            SCIPgetVarExprVar(children[index])
+            if SCIPisExprVar(scip, children[index])
+            else cython.NULL
+        )
+
+
+@cython.cfunc
+@cython.nogil
+@cython.exceptval(check=False)
+def prefetch_inputs(
+    state: cython.pointer[BlockState],
+    entry: cython.int,
+    request: cython.pointer[Prefetch],
+) -> cython.void:
+    """Fills the inputs at the variables that an entry does not read from SCIP's state.
+
+    A run covers every entry of the block, and so the entries that SCIP asks about next find
+    their children at the values the run read. If they were set to something else, those
+    entries run the program again. Nothing here is needed for correctness, since every entry
+    checks its own children.
+    """
+    function: cython.pointer[BlockFunction] = state.function
+    variables: cython.pointer[cython.pointer[SCIP_VAR]] = state.variables
+    if request.kind == PREFETCH_NONE or not state.switches.prefetch:
+        return
+    x: cython.p_double = state.inputs[SLOT_X].host
+    lower: cython.p_double = state.inputs[SLOT_LOWER].host
+    upper: cython.p_double = state.inputs[SLOT_UPPER].host
+    position: cython.int = function.pointers[entry]
+    stop: cython.int = function.pointers[entry + 1]
+    column: cython.int
+    variable: cython.pointer[SCIP_VAR]
+    interval: SCIP_INTERVAL
+    for column in range(function.n):
+        if position < stop and function.columns[position] == column:
+            position += 1
+            continue
+        variable = variables[column]
+        if variable == cython.NULL:
+            continue
+        if request.kind == PREFETCH_POINT:
+            x[column] = SCIPgetSolVal(request.scip, request.sol, variable)
+        elif request.kind == PREFETCH_BOX:
+            interval = request.intevalvar(
+                request.scip, variable, request.intevalvardata
+            )
+            lower[column] = interval.inf
+            upper[column] = interval.sup
+        else:
+            lower[column] = SCIPvarGetLbLocal(variable)
+            upper[column] = SCIPvarGetUbLocal(variable)
+            x[column] = min(
+                max(SCIPgetSolVal(request.scip, cython.NULL, variable), lower[column]),
+                upper[column],
+            )
+
+
+@cython.cfunc
 @cython.nogil
 @cython.exceptval(check=False)
 def ensure(
@@ -392,11 +497,13 @@ def ensure(
     entry: cython.int,
     program: cython.int,
     callback: cython.int,
+    request: cython.pointer[Prefetch],
 ) -> cython.int:
     """Returns the stored run of a program that is valid for an entry at the current inputs.
 
     A run that is not stored yet is executed on the inputs of the whole block and stored with
-    the inputs it read. Returns -1 if the program does not exist or fails.
+    the inputs it read. Before the run, `request` says where the inputs of the other entries
+    come from. Returns -1 if the program does not exist or fails.
     """
     function: cython.pointer[BlockFunction] = state.function
     cache: cython.pointer[RunCache] = cython.address(state.caches[program])
@@ -415,6 +522,8 @@ def ensure(
             if entry_matches(state, entry, program, slot):
                 function.statistics.hits[callback] += 1
                 return slot
+    if request != cython.NULL:
+        prefetch_inputs(state, entry, request)
     slot = cache.next
     second_length: cython.int = second_size(function, program)
     if (
@@ -534,10 +643,16 @@ def eval_callback(
     function: cython.pointer[BlockFunction] = state.function
     function.statistics.calls[CALLBACK_EVAL] += 1
     val[0] = SCIP_INVALID
+    request: Prefetch = new_request(scip, sol, PREFETCH_POINT)
+    record_variables(scip, expr, data)
     if not read_values(expr, entry_columns(data), state.inputs[SLOT_X].host):
         return SCIP_OKAY  # pragma: no cover
     slot: cython.int = ensure(
-        state, data.entry, PROGRAM_VALUE_AND_GRADIENT, CALLBACK_EVAL
+        state,
+        data.entry,
+        PROGRAM_VALUE_AND_GRADIENT,
+        CALLBACK_EVAL,
+        cython.address(request),
     )
     if slot < 0 or not entry_gradient_finite(state, data.entry, slot):
         return SCIP_OKAY  # pragma: no cover
@@ -582,7 +697,11 @@ def bwdiff_callback(
     if not read_values(expr, entry_columns(data), state.inputs[SLOT_X].host):
         return SCIP_OKAY  # pragma: no cover
     slot: cython.int = ensure(
-        state, data.entry, PROGRAM_VALUE_AND_GRADIENT, CALLBACK_BWDIFF
+        state,
+        data.entry,
+        PROGRAM_VALUE_AND_GRADIENT,
+        CALLBACK_BWDIFF,
+        cython.NULL,
     )
     if slot < 0 or not entry_gradient_finite(state, data.entry, slot):
         return SCIP_OKAY  # pragma: no cover
@@ -616,7 +735,11 @@ def fwdiff_callback(
     ):
         return SCIP_OKAY  # pragma: no cover
     slot: cython.int = ensure(
-        state, data.entry, PROGRAM_VALUE_AND_GRADIENT, CALLBACK_FWDIFF
+        state,
+        data.entry,
+        PROGRAM_VALUE_AND_GRADIENT,
+        CALLBACK_FWDIFF,
+        cython.NULL,
     )
     if slot < 0 or not entry_gradient_finite(state, data.entry, slot):
         # SCIP evaluates a point before it differentiates there, and that evaluation
@@ -658,7 +781,11 @@ def bwfwdiff_callback(
     ):
         return SCIP_OKAY
     slot: cython.int = ensure(
-        state, data.entry, PROGRAM_HESSIAN_VECTOR, CALLBACK_BWFWDIFF
+        state,
+        data.entry,
+        PROGRAM_HESSIAN_VECTOR,
+        CALLBACK_BWFWDIFF,
+        cython.NULL,
     )
     if slot < 0:
         return SCIP_OKAY
@@ -687,6 +814,10 @@ def inteval_callback(
     state: cython.pointer[BlockState] = data.state
     function: cython.pointer[BlockFunction] = state.function
     function.statistics.calls[CALLBACK_INTEVAL] += 1
+    request: Prefetch = new_request(scip, cython.NULL, PREFETCH_BOX)
+    request.intevalvar = intevalvar
+    request.intevalvardata = intevalvardata
+    record_variables(scip, expr, data)
     interval.inf = -SCIP_INTERVAL_INFINITY
     interval.sup = SCIP_INTERVAL_INFINITY
     if not read_box(
@@ -697,7 +828,9 @@ def inteval_callback(
         state.inputs[SLOT_UPPER].host,
     ):
         return SCIP_OKAY
-    slot: cython.int = ensure(state, data.entry, PROGRAM_INTERVAL, CALLBACK_INTEVAL)
+    slot: cython.int = ensure(
+        state, data.entry, PROGRAM_INTERVAL, CALLBACK_INTEVAL, cython.address(request)
+    )
     if slot < 0:
         return SCIP_OKAY  # pragma: no cover
     set_interval(
@@ -717,6 +850,7 @@ def compute_estimator(
     callback: cython.int,
     constant: cython.p_double,
     coefficients: cython.p_double,
+    request: cython.pointer[Prefetch],
 ) -> cython.bint:
     """Computes a linear estimator of an entry at the `x` input over the box of the bound inputs.
 
@@ -726,7 +860,7 @@ def compute_estimator(
     state: cython.pointer[BlockState] = data.state
     function: cython.pointer[BlockFunction] = state.function
     program: cython.int = PROGRAM_CONCAVE if side == 1 else PROGRAM_CONVEX
-    slot: cython.int = ensure(state, data.entry, program, callback)
+    slot: cython.int = ensure(state, data.entry, program, callback, request)
     if slot < 0:
         return False  # pragma: no cover
     x: cython.p_double = state.inputs[SLOT_X].host
@@ -807,8 +941,15 @@ def estimate_callback(
             or localbounds[index].sup != globalbounds[index].sup
         ):
             is_global = False
+    request: Prefetch = new_request(scip, cython.NULL, PREFETCH_ESTIMATE)
+    record_variables(scip, expr, data)
     success[0] = compute_estimator(
-        data, 1 if overestimate else 0, CALLBACK_ESTIMATE, constant, coefs
+        data,
+        1 if overestimate else 0,
+        CALLBACK_ESTIMATE,
+        constant,
+        coefs,
+        cython.address(request),
     )
     islocal[0] = not is_global
     return SCIP_OKAY
@@ -859,6 +1000,7 @@ def initestimates_callback(
             CALLBACK_INITESTIMATES,
             cython.address(constant[nreturned[0]]),
             coefs[nreturned[0]],
+            cython.NULL,
         ):
             nreturned[0] += 1
     return SCIP_OKAY
@@ -898,7 +1040,11 @@ def monotonicity_callback(
     ):
         return SCIP_OKAY
     slot: cython.int = ensure(
-        state, data.entry, PROGRAM_GRADIENT_INTERVAL, CALLBACK_MONOTONICITY
+        state,
+        data.entry,
+        PROGRAM_GRADIENT_INTERVAL,
+        CALLBACK_MONOTONICITY,
+        cython.NULL,
     )
     if slot < 0:
         return SCIP_OKAY  # pragma: no cover
@@ -973,7 +1119,12 @@ def reverseprop_callback(
     if (
         bounds.sup < SCIP_INTERVAL_INFINITY
         and compute_estimator(
-            data, 0, CALLBACK_REVERSEPROP, cython.address(constant), weights
+            data,
+            0,
+            CALLBACK_REVERSEPROP,
+            cython.address(constant),
+            weights,
+            cython.NULL,
         )
         and tighten_from_plane(
             constant, weights, bounds.sup, count, tolerance, childrenbounds
@@ -984,7 +1135,12 @@ def reverseprop_callback(
     if bounds.inf > -SCIP_INTERVAL_INFINITY:
         center_box(data, count, childrenbounds)
         if compute_estimator(
-            data, 1, CALLBACK_REVERSEPROP, cython.address(constant), weights
+            data,
+            1,
+            CALLBACK_REVERSEPROP,
+            cython.address(constant),
+            weights,
+            cython.NULL,
         ):
             for index in range(count):
                 weights[index] = -weights[index]
@@ -1554,6 +1710,7 @@ class BlockHandle:
             CALLBACK_ESTIMATE,
             cython.address(constant),
             cython.address(view[0]),
+            cython.NULL,
         )
         release_block_state(state)
         return Estimator(

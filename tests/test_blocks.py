@@ -838,3 +838,70 @@ def test_a_required_program_of_a_block_may_fail() -> None:
     )
     with pytest.raises(Exception, match="relaxation rule"):
         jcp.compile(problem, options=jcp.CompileOptions(disk_cache=False))
+
+
+def chain_problem(count: int, domain: Domain = Domain.CONTINUOUS) -> jcp.Problem:
+    """Returns a chain of products and exponentials over `count` variables."""
+    return jcp.Problem(
+        variables=jcp.Variable(lower=0.5, upper=3.0, shape=(count,), domain=domain),
+        objective=lambda x, p: -jnp.sum(x),
+        constraints=(
+            jcp.Constraint(
+                lambda x, p: x[:-1] * x[1:] + jnp.exp(0.3 * x[1:]), upper=7.0
+            ),
+        ),
+    )
+
+
+def solve_chain(
+    count: int, prefetch: bool, domain: Domain = Domain.CONTINUOUS
+) -> jcp.Solution:
+    """Solves the chain problem with prefetch switched on or off."""
+    return jcp.solve(
+        chain_problem(count, domain),
+        options=jcp.SolveOptions(time_limit=120.0, verbosity=jcp.Verbosity.QUIET),
+        compile_options=jcp.CompileOptions(
+            handler=jcp.HandlerOptions(prefetch=prefetch), disk_cache=False
+        ),
+    )
+
+
+def test_prefetch_answers_the_other_entries_of_a_block() -> None:
+    """Checks that one run answers the callbacks of all entries at the same point or box."""
+    with_prefetch = solve_chain(16, True)
+    without = solve_chain(16, False)
+    assert with_prefetch.status is without.status is jcp.Status.OPTIMAL
+    assert with_prefetch.objective == pytest.approx(without.objective, abs=1e-6)
+    for callback, factor in (("eval", 2), ("inteval", 3)):
+        runs = getattr(with_prefetch.statistics, callback).runs
+        assert runs * factor < getattr(without.statistics, callback).runs
+
+
+def test_prefetch_keeps_estimators_correct_off_the_lp_solution() -> None:
+    """Checks that integer rounding, which separates at other points, gives the same answer."""
+    with_prefetch = solve_chain(8, True, Domain.INTEGER)
+    without = solve_chain(8, False, Domain.INTEGER)
+    assert with_prefetch.status is without.status is jcp.Status.OPTIMAL
+    assert with_prefetch.objective == pytest.approx(without.objective, abs=1e-6)
+
+
+def test_prefetch_with_a_fixed_variable() -> None:
+    """Checks a block over a variable that presolve fixes, which leaves a child that is no variable."""
+    problem = jcp.Problem(
+        variables=(
+            jcp.Variable(lower=1.0, upper=1.0),
+            jcp.Variable(lower=0.5, upper=3.0, shape=(4,)),
+        ),
+        objective=lambda x, p: -jnp.sum(x[1]),
+        constraints=(
+            jcp.Constraint(
+                lambda x, p: jnp.concatenate([x[0] * x[1][:1], x[1][:-1] * x[1][1:]]),
+                upper=5.0,
+            ),
+        ),
+    )
+    solution = jcp.solve(
+        problem,
+        options=jcp.SolveOptions(time_limit=60.0, verbosity=jcp.Verbosity.QUIET),
+    )
+    assert solution.status is jcp.Status.OPTIMAL

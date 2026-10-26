@@ -65,6 +65,7 @@ cdef struct Switches:
     bint reverse_propagation
     bint hessian
     bint zero_copy
+    bint prefetch
 
 
 cdef struct Function:

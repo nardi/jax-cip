@@ -1,6 +1,6 @@
 from jaxcip._handler cimport NUM_PROGRAMS, Statistics, Switches
 from jaxcip._runtime cimport Input, MAX_INPUTS, ProgramSpec
-from jaxcip._scip cimport SCIP, SCIP_EXPR, SCIP_RETCODE
+from jaxcip._scip cimport ExprIntevalVar, SCIP, SCIP_EXPR, SCIP_RETCODE, SCIP_SOL, SCIP_VAR
 
 
 cdef enum:
@@ -8,6 +8,13 @@ cdef enum:
     MAX_RUN_SLOTS = 4
     # The inputs of a block's programs, the first five slots of `_handler.pxd`.
     NUM_BLOCK_INPUTS = 5
+
+cdef enum:
+    # What a miss fills the inputs of all entries from.
+    PREFETCH_NONE = 0
+    PREFETCH_POINT = 1
+    PREFETCH_BOX = 2
+    PREFETCH_ESTIMATE = 3
 
 
 cdef struct BlockFunction:
@@ -42,6 +49,17 @@ cdef struct BlockState:
     Input inputs[NUM_BLOCK_INPUTS]
     RunCache caches[NUM_PROGRAMS]
     double* scratch
+    # The variable of each input, or NULL where SCIP's state cannot fill the inputs.
+    SCIP_VAR** variables
+
+
+cdef struct Prefetch:
+    # Where the other entries of a block get their inputs from when one entry misses.
+    SCIP* scip
+    SCIP_SOL* sol
+    int kind
+    ExprIntevalVar intevalvar
+    void* intevalvardata
 
 
 cdef struct BlockData:

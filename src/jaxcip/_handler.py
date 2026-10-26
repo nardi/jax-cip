@@ -160,6 +160,7 @@ def switches_from(options: object) -> Switches:
     switches.reverse_propagation = handler_options.reverse_propagation
     switches.hessian = handler_options.hessian
     switches.zero_copy = handler_options.zero_copy
+    switches.prefetch = handler_options.prefetch
     return switches
 
 
