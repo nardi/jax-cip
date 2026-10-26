@@ -339,18 +339,33 @@ def test_a_copy_of_scip_gets_its_own_state(name: str) -> None:
 
 def test_solves_in_threads_agree_with_sequential_solves() -> None:
     """Checks that solves of one compiled problem in different threads share no inputs."""
-    compiled = compiled_block("scaled", upper=1.5)
-    scales = [0.4, 0.9, 1.3, 1.8]
-    options = jcp.SolveOptions(time_limit=60.0, verbosity=jcp.Verbosity.QUIET)
+    problem = jcp.Problem(
+        variables=jcp.Variable(lower=0.5, upper=3.0, shape=(40,)),
+        objective=lambda x, p: -jnp.sum(x),
+        constraints=(
+            jcp.Constraint(lambda x, p: p["scale"][0] * x[:-1] * x[1:], upper=4.0),
+        ),
+    )
+    compiled = jcp.compile(problem, PARAMS, jcp.CompileOptions(disk_cache=False))
+    scales = [0.5, 0.9, 1.3, 1.8]
+    # Eight solves share the cores here, and coverage tracing slows each of them down.
+    options = jcp.SolveOptions(time_limit=900.0, verbosity=jcp.Verbosity.QUIET)
 
-    def solve(scale: float) -> float:
-        return jcp.solve(compiled, {"scale": jnp.array([scale])}, options).objective
+    def solve(scale: float) -> jcp.Solution:
+        return jcp.solve(compiled, {"scale": jnp.array([scale])}, options)
 
     sequential = [solve(scale) for scale in scales]
     with ThreadPoolExecutor(len(scales)) as pool:
         threaded = list(pool.map(solve, scales * 2))
-    assert len(set(np.round(sequential, 6))) > 1
-    np.testing.assert_allclose(threaded, sequential * 2, rtol=1e-9)
+    assert all(
+        solution.status is jcp.Status.OPTIMAL for solution in [*sequential, *threaded]
+    )
+    expected = [solution.objective for solution in sequential]
+    assert len(set(np.round(expected, 4))) > 1
+    # SCIP stops within its gap tolerance, so equal solves differ in the last digits.
+    np.testing.assert_allclose(
+        [solution.objective for solution in threaded], expected * 2, rtol=1e-5
+    )
 
 
 def test_hessian_of_an_entry() -> None:
