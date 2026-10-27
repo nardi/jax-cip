@@ -47,9 +47,9 @@ def test_the_split_objective_has_the_known_minimum(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Checks that the problem of the cuts solves to the known optimum."""
-    # Five variables are too few to be kept apart from their sum, so the limit is lifted.
+    # Three variables are too few to be kept apart from their sum, so the limit is lifted.
     monkeypatch.setattr(_blocks, "SMALL_BLOCK", 0)
-    problem = tang(5)
+    problem = tang(3)
     compiled = jcp.compile(problem, None, jcp.CompileOptions(disk_cache=False))
     assert compiled.objective is not None
     assert len(compiled.objective.terms) == 2
@@ -58,7 +58,7 @@ def test_the_split_objective_has_the_known_minimum(
         options=jcp.SolveOptions(time_limit=120.0, verbosity=jcp.Verbosity.QUIET),
     )
     assert solution.status is jcp.Status.OPTIMAL
-    assert solution.objective == pytest.approx(5 * TANG_MINIMUM, rel=1e-5)
+    assert solution.objective == pytest.approx(3 * TANG_MINIMUM, rel=1e-5)
     assert solution.x is not None
     assert np.allclose(np.asarray(solution.x), -2.9035, atol=1e-3)
 

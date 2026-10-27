@@ -706,6 +706,26 @@ def test_a_constant_entry_is_constant_in_every_direction() -> None:
     assert solution.objective == pytest.approx(-(2.5 + 4.0 / 2.5), abs=1e-5)
 
 
+def test_a_decreasing_entry_is_decreasing_in_its_variable() -> None:
+    """Checks that SCIP learns from the gradient intervals that an entry has a negative slope."""
+    problem = jcp.Problem(
+        variables=jcp.Variable(lower=0.5, upper=2.5, shape=(2,)),
+        objective=lambda x, p: x[0] - x[1],
+        constraints=(
+            jcp.Constraint(
+                lambda x, p: jnp.stack([jnp.exp(-x[0]), 0.5]) * jnp.stack([x[1], 1.0]),
+                upper=1.0,
+            ),
+        ),
+    )
+    solution = jcp.solve(
+        problem,
+        options=jcp.SolveOptions(time_limit=60.0, verbosity=jcp.Verbosity.QUIET),
+    )
+    assert solution.status is jcp.Status.OPTIMAL
+    assert solution.objective == pytest.approx(np.log(2.5) - 2.5, abs=1e-5)
+
+
 def test_statistics_count_direct_calls() -> None:
     """Checks that direct calls of a handle count as runs and that the counters reset."""
     term, compiled = block_of("neighbours")

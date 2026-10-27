@@ -617,15 +617,21 @@ def split_rows(
             ),
         ),
     )
+    # The pieces of a row are scalars, so a cut with several entries joins the operation that
+    # reduces it, such as the sum over a stack of monomials.
     analysis = analyse(
-        flat, [jax.ShapeDtypeStruct((width,), jnp.float64)], row_avals, True
+        flat,
+        [jax.ShapeDtypeStruct((width,), jnp.float64)],
+        row_avals,
+        True,
+        lambda term, shape: True,
     )
     if analysis.shape != ():
         raise ValueError(
             f"The function of rows must return a scalar, not shape {analysis.shape}."
         )
     if (
-        any(shape != () for shape in analysis.cut_shapes)
+        any(math.prod(shape) != 1 for shape in analysis.cut_shapes)
         or any(term.gather is not None for term in analysis.nonlinear)
         or not analysis.nonlinear
     ):
@@ -639,10 +645,14 @@ def split_rows(
             entries: Array, cuts: Sequence[Array], leaves: Sequence[Array]
         ) -> Array:
             assert remainder is not None
-            return evaluate_term(remainder, (), constants, [entries], leaves, cuts)
+            shaped = [
+                cut.reshape(shape)
+                for cut, shape in zip(cuts, analysis.cut_shapes, strict=True)
+            ]
+            return evaluate_term(remainder, (), constants, [entries], leaves, shaped)
 
     pieces = []
-    for term in analysis.nonlinear:
+    for term, shape in zip(analysis.nonlinear, analysis.cut_shapes, strict=True):
         used = sorted(
             {ref.index for ref in term.inputs if ref.origin is Origin.PARAMETER}
         )
@@ -654,7 +664,7 @@ def split_rows(
         columns = np.arange(width) if selection is None else np.asarray(selection)
         pieces.append(
             RowPiece(
-                function=piece_function(term, constants, used),
+                function=piece_function(term, constants, used, shape),
                 columns=columns,
                 leaves=tuple(used),
                 structure=jax.tree.structure(list(used)),
@@ -671,7 +681,10 @@ def split_rows(
 
 
 def piece_function(
-    term: Term, constants: Sequence[np.ndarray], used: Sequence[int]
+    term: Term,
+    constants: Sequence[np.ndarray],
+    used: Sequence[int],
+    shape: tuple[int, ...],
 ) -> RowFunction:
     """Returns the function of the entries and the used leaves of a row that is a term."""
 
@@ -689,7 +702,7 @@ def piece_function(
             arguments.append(
                 value if selection is None else jnp.ravel(value)[np.asarray(selection)]
             )
-        return sum_outputs(term, (), arguments)
+        return sum_outputs(term, shape, arguments).reshape(())
 
     return evaluate
 
