@@ -43,6 +43,37 @@ def test_a_sum_over_variables_splits_into_two_cuts_and_a_linear_term() -> None:
     np.testing.assert_array_equal(linear.coefficients, np.full(COUNT, 5.0))
 
 
+def test_the_weight_of_a_single_entry_stays_in_its_cut(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks that a scalar is cut with its constant weight, and a vector or sum without it."""
+    monkeypatch.setattr(_blocks, "SMALL_BLOCK", 0)
+    problem = jcp.Problem(
+        variables=jcp.Variable(lower=0.0, upper=3.0, shape=(4,)),
+        objective=lambda x, p: (
+            3.0 * x[0] ** 2
+            + p["w"] * jnp.sin(x[1])
+            + x[0] ** 3 / 4.0
+            + 0.5 * (jnp.exp(x[3]) + x[3] ** 3)
+            + x[2] / 4.0
+        ),
+        constraints=(jcp.Constraint(lambda x, p: p["v"] @ jnp.exp(x), upper=40.0),),
+    )
+    parameters = {"w": jnp.asarray(-2.0), "v": jnp.arange(1.0, 5.0)}
+    compiled = jcp.compile(problem, parameters, jcp.CompileOptions(disk_cache=False))
+    leaves = compiled.params.leaves(parameters)
+    objective = compiled.objective
+    assert objective is not None
+    assert len(objective.terms) == 5
+    linear = linear_rows(objective, compiled.variables, leaves)
+    np.testing.assert_array_equal(linear.cut_coefficients, [1.0, 1.0, 1.0, 0.5, 0.5])
+    np.testing.assert_array_equal(linear.indices, [2])
+    np.testing.assert_array_equal(linear.coefficients, [0.25])
+    (constraint,) = compiled.constraints
+    linear = linear_rows(constraint, compiled.variables, leaves)
+    np.testing.assert_array_equal(linear.cut_coefficients, np.arange(1.0, 5.0))
+
+
 def test_the_split_objective_has_the_known_minimum(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

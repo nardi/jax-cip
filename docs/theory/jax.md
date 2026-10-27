@@ -16,6 +16,14 @@ slices, concatenations and the like. It stops at the largest nonlinear values, t
 *cuts*. For `jnp.sum(x**4 - 16*x**2 + 5*x)` the cuts are `x**4` and `x**2`, each with one
 entry per variable.
 
+A constant factor stays inside the cut when the cut has a single entry, as in
+`3.0*x[0]**2`. SCIP checks an auxiliary variable against its cut with an absolute
+tolerance, so a factor outside the cut changes which solutions pass that check. On
+`min 0.2x⁵ − 1.7x⁴ + x³ − 0.02x² + 10⁻⁴x` over `[0, 10]`, SCIP needs about 60 nodes with the
+factors inside the cuts and between 80 and 40000, depending on the coefficients, with them
+outside. The factors of a vector cut stay outside, in \(A\), where they keep the matrix
+sparse.
+
 Everything between the cuts and the output is affine in the cut entries \(F\), the
 variables \(x\) and the constants. A row of the problem is therefore
 

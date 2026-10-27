@@ -4,7 +4,7 @@ SCIP handles affine functions much better than opaque ones, since it propagates 
 separates linear rows exactly. The analysis walks back from the output of a function through
 operations that are linear in their nonlinear operands, such as additions, sums, products
 with constants and matrix products with constants. It stops at the largest nonlinear values,
-the cuts. Everything else is affine in the cuts and the variables, and its derivatives give
+the cuts, which include the constant weight of a single entry. Everything else is affine in the cuts and the variables, and its derivatives give
 the coefficients with which the cuts and the variables enter the output. Every cut keeps
 only the inputs it depends on.
 """
@@ -17,6 +17,7 @@ from typing import Any, NamedTuple, cast
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax import lax
 from jax._src.interpreters import partial_eval
 from jax.core import ShapedArray
 from jax.extend.core import ClosedJaxpr, Jaxpr, JaxprEqn, Literal, Var, jaxpr_as_fun
@@ -277,6 +278,40 @@ def is_transparent(equation: JaxprEqn, known: dict[Var, Linearity]) -> bool:
     )
 
 
+def is_weighted_scalar(
+    equation: JaxprEqn,
+    known: dict[Var, Linearity],
+    producers: dict[Var, JaxprEqn],
+    opaque: set[int],
+) -> bool:
+    """Returns whether an equation scales a cut with one entry by a constant.
+
+    The weight stays in the cut. SCIP measures the violation of a cut in its own units, so
+    a weight outside of it changes how closely the cut has to be met to contribute a given
+    amount to a row. With the weights inside, a polynomial of one variable needs about 60
+    nodes for any coefficients, and more than 40000 with the weights outside. The weights of
+    a vector stay outside, where they make the matrix of the row sparse, and so do those of
+    a sum, which is cut into its summands.
+    """
+    if equation.primitive not in (lax.mul_p, lax.div_p):
+        return False
+    if math.prod(shape_of(equation.outvars[0])) != 1:
+        return False
+    first, second = equation.invars
+    pairs = [(first, second)]
+    if equation.primitive is lax.mul_p:
+        pairs.append((second, first))
+    for operand, weight in pairs:
+        if (
+            isinstance(operand, Var)
+            and known[operand] is Linearity.NONLINEAR
+            and (isinstance(weight, Literal) or known[weight] is Linearity.CONSTANT)
+        ):
+            producer = producers[operand]
+            return id(producer) in opaque or not is_transparent(producer, known)
+    return False
+
+
 def find_cuts(
     jaxpr: Jaxpr,
     output: Atom,
@@ -308,7 +343,9 @@ def find_cuts(
         if equation is None:
             continue
         if known[atom] is Linearity.NONLINEAR and (
-            id(equation) in opaque or not is_transparent(equation, known)
+            id(equation) in opaque
+            or is_weighted_scalar(equation, known, producers, opaque)
+            or not is_transparent(equation, known)
         ):
             cuts.add(atom)
             continue
