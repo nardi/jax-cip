@@ -1,4 +1,4 @@
-from jaxcip._runtime cimport Input, MAX_INPUTS, ProgramSpec
+from cyxla._runtime cimport Input, MAX_INPUTS, ProgramSpec
 from jaxcip._scip cimport SCIP, SCIP_EXPR, SCIP_INTERVAL, SCIP_RETCODE
 
 
@@ -120,6 +120,10 @@ cdef struct ExprData:
     bint monotonicity_valid
 
 
+cdef double* as_doubles(void* memory) noexcept nogil
+cdef double* aligned_doubles(int count) noexcept nogil
+cdef void create_input(Input* host_input, int count) noexcept nogil
+cdef void destroy_input(Input* host_input) noexcept nogil
 cdef ExprData* new_expr_data(Function* function, const double* params, Switches switches) noexcept nogil
 cdef void free_expr_data(ExprData* data) noexcept nogil
 cdef SCIP_RETCODE include_handler(SCIP* scip) noexcept nogil

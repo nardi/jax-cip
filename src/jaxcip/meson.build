@@ -15,7 +15,6 @@ python.install_sources(
   '_block.pyi',
   '_handler.pyi',
   '_problem.pyi',
-  '_runtime.pyi',
   'py.typed',
   subdir: 'jaxcip',
 )
@@ -32,11 +31,11 @@ endif
 # The C declarations every module can `cimport`. They are listed as dependencies of each
 # `cython` step, because its depfile would record paths relative to the project root
 # rather than the build directory.
-declaration_files = files('_blas.pxd', '_block.pxd', '_handler.pxd', '_pjrt.pxd', '_runtime.pxd', '_scip.pxd')
+declaration_files = files('_blas.pxd', '_block.pxd', '_handler.pxd', '_scip.pxd')
 
 # Meson compiles Cython from `.pyx` sources only, so the pure Python mode modules are
 # translated to C by an explicit `cython` step.
-foreach module : ['_runtime', '_handler', '_block', '_problem']
+foreach module : ['_handler', '_block', '_problem']
   module_c = custom_target(
     module + '.c',
     input: module + '.py',
@@ -48,6 +47,7 @@ foreach module : ['_runtime', '_handler', '_block', '_problem']
       # `src/jaxcip/<module>.py`, the path coverage resolves line events against.
       '-w', meson.project_source_root(),
       '-I', 'src',
+      '-I', cyxla_include[1],
       '--module-name', 'jaxcip.' + module,
       meson.current_source_dir() / module + '.py',
       '-o', meson.current_build_dir() / module + '.c',
@@ -70,7 +70,7 @@ foreach module : ['_runtime', '_handler', '_block', '_problem']
   python.extension_module(
     module,
     module_c,
-    dependencies: [scip, openblas, lbt, pjrt, dl, python.dependency()],
+    dependencies: [scip, openblas, lbt, cyxla, python.dependency()],
     c_args: c_args,
     # The JLL libraries find their own dependencies through an `$ORIGIN` run path,
     # which only covers their own directory. Linking every one of them directly keeps

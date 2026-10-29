@@ -1,28 +1,23 @@
-"""The PJRT runtime and the caches that let later builds skip lowering and compiling.
+"""The caches that let later builds skip lowering and compiling.
 
 Building a term has two slow steps, lowering its programs to StableHLO and compiling them
-with the PJRT plugin. The disk cache stores the result of both. Lowered programs are stored
-under a key of the term's jaxpr, signature and options, so a warm build traces the function
-but neither lowers nor compiles. Executables are stored under a hash of their StableHLO, the
-compile options and the plugin.
+with the PJRT plugin. The disk cache stores the result of both, in the directory of cyxla.
+Lowered programs are stored under a key of the term's jaxpr, signature and options, so a
+warm build traces the function but neither lowers nor compiles. Cyxla stores the
+executables.
 """
 
-import functools
-import hashlib
-import importlib.metadata
 import os
-import re
 import struct
 import threading
-import time
 from pathlib import Path
 from typing import NamedTuple
 
+import cyxla
 import jax
-import jaxormick
 import numpy as np
+from cyxla import Executable
 
-from jaxcip import _runtime
 from jaxcip._blocks import BlockPattern, LoweredTerm
 from jaxcip._programs import (
     LoweredProgram,
@@ -30,28 +25,15 @@ from jaxcip._programs import (
     ProgramOptions,
     TermSignature,
 )
-from jaxcip._runtime import Executable
-from jaxcip._types import RuntimeInfo
-
-PLUGIN_ENVIRONMENT_VARIABLE = "JAXCIP_PJRT_PLUGIN"
-"""Environment variable with the path of the PJRT plugin that is loaded by default."""
-
-CACHE_ENVIRONMENT_VARIABLE = "JAXCIP_CACHE_DIR"
-"""Environment variable with the directory of the disk cache."""
-
-LOCATION_PATTERN = re.compile(r"^#loc.*$|\s*loc\((?:[^()]|\([^()]*\))*\)", re.MULTILINE)
-"""Source locations in StableHLO text, which differ between traces of the same function."""
 
 LOWERED_MAGIC = b"JAXCIP-LOWERED-3\n"
 """First bytes of a file of lowered programs."""
 
+LOWERED_SUFFIX = ".jaxcip-lowered"
+"""Suffix of the files of lowered programs, which differs from the one cyxla uses."""
 
-class PluginIdentity(NamedTuple):
-    """What identifies the loaded plugin in cache keys."""
-
-    path: Path
-    size: int
-    modified_ns: int
+KEY_DISTRIBUTIONS = ("jaxcip", "jaxormick")
+"""Distributions besides JAX and cyxla whose code determines the lowered programs."""
 
 
 class BuildStatistics(NamedTuple):
@@ -84,66 +66,6 @@ class BuildStatistics(NamedTuple):
         )
 
 
-plugin_identity: PluginIdentity | None = None
-"""The loaded plugin, set by `initialize`."""
-
-
-def initialize(plugin: Path | None = None) -> RuntimeInfo:
-    """Loads a PJRT plugin and returns details of its runtime.
-
-    Without a path the plugin comes from the `JAXCIP_PJRT_PLUGIN` environment variable.
-    Building a problem calls this when no plugin is loaded yet. A process loads one plugin,
-    so later calls return the details of the first.
-    """
-    global plugin_identity
-    if _runtime.is_initialized():
-        return _runtime.runtime_info()
-    if plugin is None:
-        value = os.environ.get(PLUGIN_ENVIRONMENT_VARIABLE)
-        if not value:
-            raise RuntimeError(
-                f"Pass the path of a PJRT plugin or set {PLUGIN_ENVIRONMENT_VARIABLE}."
-            )
-        plugin = Path(value)
-    path = plugin.resolve()
-    info = _runtime.initialize(str(path))
-    status = path.stat()
-    plugin_identity = PluginIdentity(path, status.st_size, status.st_mtime_ns)
-    return info
-
-
-@functools.cache
-def compile_options() -> bytes:
-    """Returns the serialized `CompileOptionsProto` for one replica and one partition."""
-    from jax._src import compiler
-
-    options = compiler.get_compile_options(num_replicas=1, num_partitions=1)
-    return options.SerializeAsString()
-
-
-@functools.cache
-def library_identity() -> bytes:
-    """Returns the versions of the libraries that lowered programs depend on.
-
-    JAXormick is installed from git, so its version number does not change with its code.
-    Its source files are hashed instead.
-    """
-    digest = hashlib.sha256()
-    for name in ("jax", "jaxlib", "jaxcip"):
-        digest.update(f"{name}={importlib.metadata.version(name)}\0".encode())
-    for path in sorted(Path(jaxormick.__file__).parent.rglob("*.py")):
-        digest.update(path.read_bytes())
-    return digest.digest()
-
-
-def cache_directory() -> Path:
-    """Returns the directory of the disk cache, creating it if needed."""
-    value = os.environ.get(CACHE_ENVIRONMENT_VARIABLE)
-    directory = Path(value) if value else Path.home() / ".cache" / "jaxcip"
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory
-
-
 def term_key(
     jaxpr_text: str,
     signs: tuple[float, ...],
@@ -151,12 +73,13 @@ def term_key(
     options: ProgramOptions,
 ) -> str:
     """Returns the key of a term's programs, equal for terms that compile to the same code."""
-    digest = hashlib.sha256(library_identity())
-    digest.update(jaxpr_text.encode())
-    digest.update(repr(signs).encode())
-    digest.update(repr(signature).encode())
-    digest.update(repr(options).encode())
-    return digest.hexdigest()
+    return cyxla.cache_key(
+        jaxpr_text,
+        repr(signs),
+        repr(signature),
+        repr(options),
+        distributions=KEY_DISTRIBUTIONS,
+    )
 
 
 def write_atomically(path: Path, data: bytes) -> None:
@@ -230,7 +153,7 @@ def load_lowered(key: str) -> LoweredTerm | None:
 
     A malformed file is removed.
     """
-    path = cache_directory() / f"{key}.lowered"
+    path = cyxla.cache_directory() / f"{key}{LOWERED_SUFFIX}"
     if not path.exists():
         return None
     try:
@@ -242,44 +165,24 @@ def load_lowered(key: str) -> LoweredTerm | None:
 
 def store_lowered(key: str, term: LoweredTerm) -> None:
     """Stores a lowered term under a key."""
-    write_atomically(cache_directory() / f"{key}.lowered", encode_lowered(term))
-
-
-def executable_key(program: LoweredProgram) -> str:
-    """Returns the cache key of a program's executable."""
-    if plugin_identity is None:
-        raise RuntimeError("No PJRT plugin is loaded.")
-    digest = hashlib.sha256(LOCATION_PATTERN.sub("", program.text).encode())
-    digest.update(b"\0" + compile_options() + b"\0" + repr(plugin_identity).encode())
-    return digest.hexdigest()
+    write_atomically(
+        cyxla.cache_directory() / f"{key}{LOWERED_SUFFIX}", encode_lowered(term)
+    )
 
 
 def compile_program(
     program: LoweredProgram, disk_cache: bool
 ) -> tuple[Executable, BuildStatistics]:
-    """Compiles a program, or loads its executable from the disk cache.
-
-    A cached executable that the plugin rejects is removed and compiled again.
-    """
-    path = cache_directory() / f"{executable_key(program)}.pjrt" if disk_cache else None
-    if path is not None and path.exists():
-        start = time.perf_counter()
-        try:
-            executable = Executable.deserialize(path.read_bytes())
-        except RuntimeError:
-            path.unlink(missing_ok=True)
-        else:
-            return executable, BuildStatistics(
-                load_seconds=time.perf_counter() - start, loaded=1
-            )
-    start = time.perf_counter()
-    executable = Executable.compile(program.code, compile_options())
-    statistics = BuildStatistics(
-        compile_seconds=time.perf_counter() - start, compiled=1
+    """Compiles a program for the CPU, or loads its executable from the disk cache."""
+    executable, compiled = cyxla.compile_program(
+        cyxla.LoweredProgram(program.code, program.text, platform="cpu"), disk_cache
     )
-    if path is not None:
-        write_atomically(path, executable.serialize())
-    return executable, statistics
+    return executable, BuildStatistics(
+        compile_seconds=compiled.compile_seconds,
+        load_seconds=compiled.load_seconds,
+        compiled=compiled.compiled,
+        loaded=compiled.loaded,
+    )
 
 
 def enable_x64() -> None:

@@ -18,9 +18,13 @@ scip = dependency('SCIP')
 openblas = dependency('OpenBLAS32')
 lbt = dependency('libblastrampoline')
 
-# The PJRT C API is a single header, vendored from XLA. The plugin itself is opened
-# with `dlopen` at run time.
-pjrt = declare_dependency(include_directories: include_directories('third_party/xla'))
-dl = meson.get_compiler('c').find_library('dl')
+# The PJRT C API header and the declarations of the cyxla runtime come with the installed
+# cyxla. The first directory holds the header, the second the `.pxd` files.
+cyxla_include = run_command(
+  python, '-c', 'import cyxla; print("\\n".join(cyxla.get_include()))', check: true,
+).stdout().strip().split('\n')
+# A virtual environment inside the source tree puts cyxla there too, which
+# `include_directories` refuses, so the directory goes in as a compiler argument.
+cyxla = declare_dependency(compile_args: ['-I' + cyxla_include[0]])
 
 subdir('src/jaxcip')

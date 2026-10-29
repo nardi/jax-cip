@@ -12,14 +12,13 @@ relaxes.
 ## Installation
 
 JAX-CIP builds from source with Meson and links SCIP 10.1 from the SCIP_jll binaries. It
-runs its programs through a PJRT plugin, which a script downloads:
+runs its programs through [cyxla](https://github.com/nardi/cyxla), which installs a PJRT
+CPU plugin from a wheel, so nothing downloads at run time:
 
 ```bash
 git clone https://github.com/nardi/jax-cip
 cd jax-cip
 uv sync
-scripts/fetch_pjrt_plugin.sh ~/.cache/jaxcip/pjrt
-export JAXCIP_PJRT_PLUGIN=~/.cache/jaxcip/pjrt/libpjrt_cpu.so
 ```
 
 ## Example

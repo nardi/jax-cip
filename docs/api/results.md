@@ -12,6 +12,4 @@
 
 ::: jaxcip.BuildStatistics
 
-::: jaxcip.RuntimeInfo
-
 ::: jaxcip.ScipVersion

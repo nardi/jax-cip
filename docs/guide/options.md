@@ -51,7 +51,7 @@ assert solution.status is jcp.Status.OPTIMAL
   SCIP](../theory/jax.md#jaxpr-analysis) explains the trade-off.
 - `gradient_interval_limit` is the size, in jaxpr equations, above which a term has no
   gradient interval program and so no monotonicity.
-- `disk_cache` stores lowered programs and executables in `JAXCIP_CACHE_DIR`.
+- `disk_cache` stores lowered programs and executables in `CYXLA_CACHE_DIR`.
 - `threads` is the number of threads that lower and compile programs. It defaults to the
   number of CPU cores, and 1 builds everything on the calling thread.
 - `relaxation` and `handler` are the two groups below.

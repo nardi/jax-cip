@@ -124,8 +124,9 @@ relaxations need a finite box, and SCIP branches instead.
 ## Execution through PJRT
 
 JAX-CIP exports each program with `jax.export` to
-[StableHLO](https://openxla.org/stablehlo), and the PJRT plugin compiles it into an
-executable. The callbacks are C functions that run the executables through the [PJRT C
+[StableHLO](https://openxla.org/stablehlo), and [cyxla](https://nardi.github.io/cyxla/)
+compiles it with the PJRT plugin into an executable. The callbacks are C functions that
+run the executables through the runtime of cyxla and the [PJRT C
 API](https://openxla.org/xla/pjrt/pjrt_integration) without taking the GIL. The input
 buffers are 64-byte aligned host memory that the plugin reads directly, and the handler
 reads outputs from the plugin's buffers when it allows that, so a call copies nothing.
@@ -195,9 +196,6 @@ interval programs take 100 to 150 µs on a box with a stored parent, against 250
 - The root must be unique. JAXormick proves that on every box for the relaxations, but the
   value programs do not check it. With several roots, the guess picks one, and the value
   and the relaxations can disagree.
-- The PJRT plugin has no LAPACK, so a solver that calls `jnp.linalg.solve` or
-  `jnp.linalg.inv` does not compile. A solver can write its linear algebra with
-  elementwise operations and `lax.fori_loop`.
 - JAXormick has no rule for the gradient of a root, so the term has no gradient interval
   program and SCIP treats its monotonicity as unknown.
 - The Krawczyk operator only verifies a root on a box that is small compared with the

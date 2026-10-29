@@ -1,7 +1,8 @@
 # Installation
 
-JAX-CIP builds from source with [Meson](https://mesonbuild.com/) and needs a PJRT plugin
-at run time. CI tests it on Linux x86-64 with Python 3.12 and 3.13.
+JAX-CIP builds from source with [Meson](https://mesonbuild.com/) and runs its programs
+through [cyxla](https://nardi.github.io/cyxla/). CI tests it on Linux x86-64 with Python
+3.12 and 3.13.
 
 ## SCIP
 
@@ -16,17 +17,14 @@ first build, so you don't need SCIP installed on the system.
 
 JAX-CIP runs its programs through the [PJRT C
 API](https://openxla.org/xla/pjrt/pjrt_integration), outside the Python interpreter, so
-that SCIP's callbacks never take the GIL. jaxlib links its CPU client statically and
-ships no plugin library, so the CPU plugin comes from a prebuilt release.
-`scripts/fetch_pjrt_plugin.sh` downloads it and checks its hash:
+that SCIP's callbacks never take the GIL. cyxla compiles the programs and declares the
+functions that run them. jaxlib links its CPU client statically and ships
+no plugin library, so the CPU plugin is a separate wheel, `cyxla-pjrt-cpu`. JAX-CIP
+depends on `cyxla[cpu]`, which installs both, so `uv sync` needs no further step.
 
-```bash
-scripts/fetch_pjrt_plugin.sh ~/.cache/jaxcip/pjrt
-export JAXCIP_PJRT_PLUGIN=~/.cache/jaxcip/pjrt/libpjrt_cpu.so
-```
-
-[`initialize`][jaxcip.initialize] loads a plugin from a path instead of the environment
-variable. Call it before compiling the first problem.
+`cyxla.initialize` loads another plugin, or the same one with other options. Call it
+before compiling the first problem. The [cyxla
+documentation](https://nardi.github.io/cyxla/) describes the plugins and their options.
 
 ## The package
 
@@ -53,7 +51,7 @@ uv run --no-sync pytest benchmarks -o addopts="" --benchmark-only
 
 | Variable | Meaning |
 | --- | --- |
-| `JAXCIP_PJRT_PLUGIN` | Path of the PJRT plugin loaded by default |
-| `JAXCIP_CACHE_DIR` | Directory of the disk cache, `~/.cache/jaxcip` if unset |
+| `CYXLA_PJRT_PLUGIN` | Path of a PJRT plugin that replaces the installed ones |
+| `CYXLA_CACHE_DIR` | Directory of the disk cache, `~/.cache/cyxla` if unset |
 | `JAXCIP_MINLPLIB_DIR` | Directory of the MINLPLib instances for the test suite |
 | `JAXCIP_MINLPLIB_RESULTS` | File that the MINLPLib suite appends its results to |

@@ -4,6 +4,7 @@ import os
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
+import cyxla
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -40,24 +41,22 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def runtime(tmp_path_factory: pytest.TempPathFactory) -> Iterator[jcp.RuntimeInfo]:
-    """Loads the PJRT plugin named by `JAXCIP_PJRT_PLUGIN`, with a fresh disk cache."""
-    if not os.environ.get("JAXCIP_PJRT_PLUGIN"):
-        pytest.fail("Set JAXCIP_PJRT_PLUGIN to the path of a PJRT CPU plugin.")
-    previous = os.environ.get("JAXCIP_CACHE_DIR")
-    os.environ["JAXCIP_CACHE_DIR"] = str(tmp_path_factory.mktemp("cache"))
+def runtime(tmp_path_factory: pytest.TempPathFactory) -> Iterator[cyxla.RuntimeInfo]:
+    """Loads the CPU plugin of cyxla, with a fresh disk cache."""
+    previous = os.environ.get("CYXLA_CACHE_DIR")
+    os.environ["CYXLA_CACHE_DIR"] = str(tmp_path_factory.mktemp("cache"))
     jax.config.update("jax_enable_x64", True)
-    yield jcp.initialize()
+    yield cyxla.initialize(platform="cpu")
     if previous is None:
-        del os.environ["JAXCIP_CACHE_DIR"]
+        del os.environ["CYXLA_CACHE_DIR"]
     else:
-        os.environ["JAXCIP_CACHE_DIR"] = previous
+        os.environ["CYXLA_CACHE_DIR"] = previous
 
 
 @pytest.fixture
 def cache_directory() -> Path:
     """Returns the disk cache directory of the session."""
-    return Path(os.environ["JAXCIP_CACHE_DIR"])
+    return Path(os.environ["CYXLA_CACHE_DIR"])
 
 
 def random_boxes(

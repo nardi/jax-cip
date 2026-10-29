@@ -357,6 +357,47 @@ wheels = [
 ]
 
 [[package]]
+name = "cyxla"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jax" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/64/6c/0bb40723e218fbe58824ca6ba39334c4522bab90f1b4390357a2f61622e6/cyxla-0.1.0.tar.gz", hash = "sha256:c7b8407d8cd00bf3091003c3ad35f88b056b67b16acb972473a9c1ef6a4fdf85", size = 215041, upload-time = "2026-10-29T10:48:41.806Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/60/e700c810823e6b87e734c63ccb2c9f7e7c9aff6fea62e9d3810fda016108/cyxla-0.1.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:91b601903e9f41f004cfe4134a4af18e36671cfc039de720ca029fdfba925966", size = 146359, upload-time = "2026-10-29T10:48:24.354Z" },
+    { url = "https://files.pythonhosted.org/packages/e7/61/7340e8a521124a0199375baeaa8179e2d3588ddaab4a9739134efe32dd16/cyxla-0.1.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:0e0db810bc42f8826c96150147e1549b6af38458d49b663d1962042155b1e263", size = 157370, upload-time = "2026-10-29T10:48:25.721Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/89/51bbf762b8acb9cdaed367e6ce96de95445051dd2df5ed31d8ce30516ed8/cyxla-0.1.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3e886d46a23bf7b9153e64191839b88901a18ad36ff7d1a2ea9de58cf9fc9ba2", size = 162998, upload-time = "2026-10-29T10:48:27.051Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/0d/ac58693e86ea75ab17aaf22f240ba9c1f6eecbce7d0dfe5bdd7e55d3145c/cyxla-0.1.0-cp312-cp312-win_amd64.whl", hash = "sha256:a7a57d8af9aaa7ff6ca99b41a25d8577946feff37c15d22316679600a4c8694f", size = 138505, upload-time = "2026-10-29T10:48:28.316Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/e8/29689d78aa12d1c8a85c97fadaa0c415a3eeefa1adb362ca156f6e67fa1e/cyxla-0.1.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:2a16d34df3fe71f546d03c36bce892241fb4d9983a1036d57b70a72592d55393", size = 146108, upload-time = "2026-10-29T10:48:29.868Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/f0/f2a127cc5032eb4d1b825a4597e6daf3f903f65e4e06c61823436999fd9f/cyxla-0.1.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:dd1e16c0d82e5ffae1698ea32b78cab28c726e0bc042cb6a2a5de9fddd6fbbf3", size = 156497, upload-time = "2026-10-29T10:48:31.235Z" },
+    { url = "https://files.pythonhosted.org/packages/53/3d/d4c6beed6e754ad153cfc8286b0ec3c3f98e1a84e9f028b3476584b1571c/cyxla-0.1.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d7aec3f6782bbe4fd12fe8d674252ac5151493d8fe2b24ea2ff26c853800de5b", size = 162480, upload-time = "2026-10-29T10:48:32.766Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/26/acd3b61326d4755521d8c73fad7ae86dbbf56c60332db3520e00554a56e7/cyxla-0.1.0-cp313-cp313-win_amd64.whl", hash = "sha256:a9347089944443303a9748f9273cd8f54db2a90a2082dc60889d3b0f8fb9d6c8", size = 138465, upload-time = "2026-10-29T10:48:34.183Z" },
+    { url = "https://files.pythonhosted.org/packages/95/a7/90f5813ab8fa2f72dc914d86a21959b2904f0a1771119b719b8a7ce16646/cyxla-0.1.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:06a3b2978fa96df024030286ae9905f0e976305173524ee116f96d6d69728c57", size = 146536, upload-time = "2026-10-29T10:48:35.538Z" },
+    { url = "https://files.pythonhosted.org/packages/73/6c/24f72a29e1ed3ef17965476e0bc74eb1a0dff041dd78a103c1815bce8855/cyxla-0.1.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:263ebefe18e0718a5c6e68bda147e553b79f22772def7ee3cf6f124117e84a1c", size = 157668, upload-time = "2026-10-29T10:48:37.417Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/20/5a36f481a014bd9ff24dcc943f7d6a480b7201c2001811413cbe2c79bef6/cyxla-0.1.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:dfa2a7c562618e023c836941d3bdf8c3b86d5bff3b7e184e3249bbb85d7bca3e", size = 162579, upload-time = "2026-10-29T10:48:39.093Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/9a/ef2ea147510a9f7877aed87970ae4cd1285fb6441b7a85242787f0260cb1/cyxla-0.1.0-cp314-cp314-win_amd64.whl", hash = "sha256:e3120b50f5cae0ce8278467c4816e09dbb4509a42f140026b2b77550ea98fe01", size = 140427, upload-time = "2026-10-29T10:48:40.423Z" },
+]
+
+[package.optional-dependencies]
+cpu = [
+    { name = "cyxla-pjrt-cpu" },
+]
+
+[[package]]
+name = "cyxla-pjrt-cpu"
+version = "0.12.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/0b/e201c9cae2d5c82681508966b48e55f35b7f890468292132cefe9e2abed3/cyxla_pjrt_cpu-0.12.0.1.tar.gz", hash = "sha256:8ed398a3082f78aa63f5dd66b457fd03034ed70680ad1b914016da2ec398df4f", size = 15832, upload-time = "2026-10-29T10:36:40.673Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/91/b1/e0c0676914fedc49978122dfffd6d595633cf0414b24cb76df88f60e0154/cyxla_pjrt_cpu-0.12.0.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:260d4e33eecbcaae488f31541737bd944b02e7496d775c84bd77d1ee6005103c", size = 43761280, upload-time = "2026-10-29T10:36:26.834Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/b5/06a2e5653bb39ee56b47ed7cf238161cd1915cfc06c079468217551b5e2c/cyxla_pjrt_cpu-0.12.0.1-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:9901446f9b05cbc91f3199a0622e68eb9aa2773e1e2df24c03d7219fa0c5f430", size = 59527080, upload-time = "2026-10-29T10:36:30.499Z" },
+    { url = "https://files.pythonhosted.org/packages/48/35/fb78d0ece96e6580476a157a91638570bf24c6660e6e6a3551d05bc91f81/cyxla_pjrt_cpu-0.12.0.1-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:b10b346ea1067613e12e6322e418b7428504309381797806b6ee6a581414fd66", size = 66389230, upload-time = "2026-10-29T10:36:34.308Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/a6/2ae947f993976e3c923d8ecfea4035cc8a9b2ca5c66dcca7c8d0e5918b51/cyxla_pjrt_cpu-0.12.0.1-py3-none-win_amd64.whl", hash = "sha256:6f47debf43767d483ab5db603cc4b1c7619fb4f62fd05cbfad534553a76e73c0", size = 56820591, upload-time = "2026-10-29T10:36:37.965Z" },
+]
+
+[[package]]
 name = "equinox"
 version = "0.13.8"
 source = { registry = "https://pypi.org/simple" }
@@ -517,6 +558,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "asdex" },
+    { name = "cyxla", extra = ["cpu"] },
     { name = "jax" },
     { name = "jaxormick" },
     { name = "jaxtyping" },
@@ -548,6 +590,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "asdex", git = "https://github.com/adrhill/asdex?rev=da130b048b72c03e5ac1cb154968797bc32868b8" },
+    { name = "cyxla", extras = ["cpu"], specifier = ">=0.1,<0.2" },
     { name = "jax", specifier = ">=0.11,<0.12" },
     { name = "jaxormick", git = "https://github.com/nardi/jaxormick?rev=06d12d85fcc6cc145b3db9b21ff854546e77bf93" },
     { name = "jaxtyping", specifier = ">=0.2" },

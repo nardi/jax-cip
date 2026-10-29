@@ -1,5 +1,5 @@
 name: Set up JAX-CIP
-description: Installs uv, Python, the PJRT CPU plugin and the project with its dependencies.
+description: Installs uv, Python and the project with its dependencies.
 
 inputs:
   python-version:
@@ -30,20 +30,6 @@ runs:
       with:
         path: subprojects/packagecache
         key: jll-${{ runner.os }}-${{ hashFiles('meson-jll.lock') }}
-
-    - name: Cache PJRT plugin
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/jaxcip/pjrt
-        key: pjrt-${{ runner.os }}-${{ hashFiles('scripts/fetch_pjrt_plugin.sh') }}
-
-    - name: Fetch PJRT plugin
-      shell: bash
-      run: |
-        if [ ! -f ~/.cache/jaxcip/pjrt/libpjrt_cpu.so ]; then
-          scripts/fetch_pjrt_plugin.sh ~/.cache/jaxcip/pjrt
-        fi
-        echo "JAXCIP_PJRT_PLUGIN=$HOME/.cache/jaxcip/pjrt/libpjrt_cpu.so" >> "$GITHUB_ENV"
 
     - name: Sync dependencies
       shell: bash

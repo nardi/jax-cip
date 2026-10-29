@@ -10,6 +10,7 @@ the speed of the machine.
 from collections.abc import Callable, Iterator
 from functools import cache
 
+import cyxla
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -30,12 +31,12 @@ MACHINE_REFERENCE = "machine"
 
 
 @pytest.fixture(scope="session", autouse=True)
-def runtime(tmp_path_factory: pytest.TempPathFactory) -> Iterator[jcp.RuntimeInfo]:
-    """Loads the PJRT plugin named by `JAXCIP_PJRT_PLUGIN`, with a fresh disk cache."""
+def runtime(tmp_path_factory: pytest.TempPathFactory) -> Iterator[cyxla.RuntimeInfo]:
+    """Loads the CPU plugin of cyxla, with a fresh disk cache."""
     with pytest.MonkeyPatch.context() as patch:
-        patch.setenv("JAXCIP_CACHE_DIR", str(tmp_path_factory.mktemp("cache")))
+        patch.setenv("CYXLA_CACHE_DIR", str(tmp_path_factory.mktemp("cache")))
         enable_x64()
-        yield jcp.initialize()
+        yield cyxla.initialize(platform="cpu")
 
 
 def six_hump_camel(x: jax.Array, params: jax.Array) -> jax.Array:

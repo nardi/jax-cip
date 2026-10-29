@@ -10,8 +10,6 @@
 
 ::: jaxcip.solve_file
 
-::: jaxcip.initialize
-
 ::: jaxcip.clear_caches
 
 ::: jaxcip.scip_version

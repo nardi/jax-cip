@@ -267,7 +267,7 @@ def test_disk_cache_after_clearing(cache_directory: Path) -> None:
     statistics = jcp.compile(problem).statistics
     assert statistics.reused == statistics.lowered == statistics.compiled == 0
     assert statistics.loaded > 0
-    assert any(cache_directory.glob("*.lowered"))
+    assert any(cache_directory.glob("*.jaxcip-lowered"))
 
 
 def test_compiled_terms_limit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -533,3 +533,15 @@ def test_invalid_constraint() -> None:
     )
     with pytest.raises(TypeError, match="must be a Constraint"):
         jcp.compile(problem)
+
+
+def test_linear_algebra_kernel_in_a_term() -> None:
+    """Checks that a term with a LAPACK kernel compiles and solves."""
+    matrix = jnp.array([[4.0, 1.0], [1.0, 3.0]])
+    problem = jcp.Problem(
+        variables=jcp.Variable(lower=-2.0, upper=2.0, shape=(2,)),
+        objective=lambda x, params: jnp.sum(jnp.linalg.solve(matrix, x) ** 2),
+    )
+    solution = jcp.solve(problem, options=jcp.SolveOptions(time_limit=20.0))
+    assert solution.status is jcp.Status.OPTIMAL
+    assert solution.objective == pytest.approx(0.0, abs=1e-8)

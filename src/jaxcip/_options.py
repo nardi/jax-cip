@@ -69,7 +69,7 @@ class CompileOptions(NamedTuple):
     disk_cache: bool = True
     """Whether lowered programs and executables are stored in the cache directory.
 
-    The directory is `JAXCIP_CACHE_DIR` if set, and `~/.cache/jaxcip` otherwise.
+    The directory is `CYXLA_CACHE_DIR` if set, and `~/.cache/cyxla` otherwise.
     """
     threads: int | None = None
     """Number of threads that lower and compile programs, or `None` for one per CPU core.

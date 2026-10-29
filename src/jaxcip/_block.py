@@ -13,7 +13,18 @@ solves in different threads never share an input.
 """
 
 import cython
+import cyxla
 import numpy as np
+from cython.cimports.cyxla._runtime import (
+    ABI_VERSION,
+    MAX_OUTPUTS,
+    Executable,
+    Input,
+    ProgramSpec,
+    execute,
+    free_aligned,
+    now,
+)
 from cython.cimports.jaxcip._handler import (
     CALLBACK_BWDIFF,
     CALLBACK_BWFWDIFF,
@@ -40,21 +51,14 @@ from cython.cimports.jaxcip._handler import (
     SLOT_X,
     Statistics,
     Switches,
+    aligned_doubles,
     all_finite,
+    as_doubles,
+    create_input,
+    destroy_input,
     set_interval,
     switches_from,
     tighten_from_plane,
-)
-from cython.cimports.jaxcip._runtime import (
-    MAX_OUTPUTS,
-    Executable,
-    Input,
-    ProgramSpec,
-    alias_buffer,
-    aligned_doubles,
-    destroy_buffer,
-    execute,
-    now,
 )
 from cython.cimports.jaxcip._scip import (
     SCIP,
@@ -117,9 +121,9 @@ from cython.cimports.libc.math import fabs, isfinite, isnan
 from cython.cimports.libc.stdint import uintptr_t
 from cython.cimports.libc.stdlib import calloc, free, malloc, realloc
 from cython.cimports.libc.string import memcpy, memset
+from cyxla._runtime import raise_last_error
 
 from jaxcip._options import HandlerOptions
-from jaxcip._runtime import raise_last_error, require_runtime
 from jaxcip._types import (
     CallbackStatistics,
     Estimator,
@@ -128,6 +132,8 @@ from jaxcip._types import (
     Program,
     Programs,
 )
+
+cyxla.check_abi(ABI_VERSION)
 
 BLOCK_HANDLER_NAME = cython.declare(
     cython.pointer[cython.const[cython.char]], b"jaxblock"
@@ -258,11 +264,9 @@ def new_block_state(
     size: cython.int
     for slot in range(SLOT_PARAMS + 1):
         size = function.m if slot == SLOT_PARAMS else function.n
-        state.inputs[slot].host = aligned_doubles(size)
-        state.inputs[slot].size = size
-        state.inputs[slot].buffer = alias_buffer(state.inputs[slot].host, size)
+        create_input(cython.address(state.inputs[slot]), size)
     memcpy(
-        state.inputs[SLOT_PARAMS].host,
+        as_doubles(state.inputs[SLOT_PARAMS].host),
         params,
         function.m * cython.sizeof(cython.double),
     )
@@ -298,13 +302,12 @@ def release_block_state(state: cython.pointer[BlockState]) -> cython.void:
     slot: cython.int
     program: cython.int
     for slot in range(SLOT_PARAMS + 1):
-        destroy_buffer(state.inputs[slot].buffer)
-        free(state.inputs[slot].host)
+        destroy_input(cython.address(state.inputs[slot]))
     for program in range(NUM_PROGRAMS):
-        free(state.caches[program].keys)
-        free(state.caches[program].first)
-        free(state.caches[program].second)
-    free(state.scratch)
+        free_aligned(state.caches[program].keys)
+        free_aligned(state.caches[program].first)
+        free_aligned(state.caches[program].second)
+    free_aligned(state.scratch)
     free(state.variables)
     free(state)
 
@@ -355,7 +358,7 @@ def execute_program(
     if spec.handle == cython.NULL:
         return -1
     inputs: Input[MAX_INPUTS]
-    outputs: cython.p_double[MAX_OUTPUTS]
+    outputs: cython.p_void[MAX_OUTPUTS]
     index: cython.int
     for index in range(spec.num_inputs):
         inputs[index] = state.inputs[function.slots[program][index]]
@@ -387,7 +390,7 @@ def entry_matches(
     key: cython.int
     position: cython.int
     for key in range(count):
-        live = state.inputs[key_slot(program, key)].host
+        live = as_doubles(state.inputs[key_slot(program, key)].host)
         for position in range(function.pointers[entry], function.pointers[entry + 1]):
             column = function.columns[position]
             if live[column] != snapshot[key * function.n + column]:
@@ -457,9 +460,9 @@ def prefetch_inputs(
     variables: cython.pointer[cython.pointer[SCIP_VAR]] = state.variables
     if request.kind == PREFETCH_NONE or not state.switches.prefetch:
         return
-    x: cython.p_double = state.inputs[SLOT_X].host
-    lower: cython.p_double = state.inputs[SLOT_LOWER].host
-    upper: cython.p_double = state.inputs[SLOT_UPPER].host
+    x: cython.p_double = as_doubles(state.inputs[SLOT_X].host)
+    lower: cython.p_double = as_doubles(state.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(state.inputs[SLOT_UPPER].host)
     position: cython.int = function.pointers[entry]
     stop: cython.int = function.pointers[entry + 1]
     column: cython.int
@@ -543,7 +546,7 @@ def ensure(
     for key in range(count):
         memcpy(
             cache.keys + (slot * count + key) * function.n,
-            state.inputs[key_slot(program, key)].host,
+            as_doubles(state.inputs[key_slot(program, key)].host),
             function.n * cython.sizeof(cython.double),
         )
     cache.next = (slot + 1) % run_slots(program)
@@ -645,7 +648,9 @@ def eval_callback(
     val[0] = SCIP_INVALID
     request: Prefetch = new_request(scip, sol, PREFETCH_POINT)
     record_variables(scip, expr, data)
-    if not read_values(expr, entry_columns(data), state.inputs[SLOT_X].host):
+    if not read_values(
+        expr, entry_columns(data), as_doubles(state.inputs[SLOT_X].host)
+    ):
         return SCIP_OKAY  # pragma: no cover
     slot: cython.int = ensure(
         state,
@@ -694,7 +699,9 @@ def bwdiff_callback(
     function: cython.pointer[BlockFunction] = state.function
     function.statistics.calls[CALLBACK_BWDIFF] += 1
     val[0] = SCIP_INVALID
-    if not read_values(expr, entry_columns(data), state.inputs[SLOT_X].host):
+    if not read_values(
+        expr, entry_columns(data), as_doubles(state.inputs[SLOT_X].host)
+    ):
         return SCIP_OKAY  # pragma: no cover
     slot: cython.int = ensure(
         state,
@@ -725,14 +732,14 @@ def fwdiff_callback(
     state: cython.pointer[BlockState] = data.state
     function: cython.pointer[BlockFunction] = state.function
     columns: cython.pointer[cython.int] = entry_columns(data)
-    dots: cython.p_double = state.inputs[SLOT_DIRECTION].host
+    dots: cython.p_double = as_doubles(state.inputs[SLOT_DIRECTION].host)
     total: cython.double = 0.0
     index: cython.int
     function.statistics.calls[CALLBACK_FWDIFF] += 1
     dot[0] = SCIP_INVALID
-    if not read_values(expr, columns, state.inputs[SLOT_X].host) or not read_dots(
-        expr, columns, dots
-    ):
+    if not read_values(
+        expr, columns, as_doubles(state.inputs[SLOT_X].host)
+    ) or not read_dots(expr, columns, dots):
         return SCIP_OKAY  # pragma: no cover
     slot: cython.int = ensure(
         state,
@@ -776,8 +783,8 @@ def bwfwdiff_callback(
     bardot[0] = SCIP_INVALID
     if (
         not state.switches.hessian
-        or not read_values(expr, columns, state.inputs[SLOT_X].host)
-        or not read_dots(expr, columns, state.inputs[SLOT_DIRECTION].host)
+        or not read_values(expr, columns, as_doubles(state.inputs[SLOT_X].host))
+        or not read_dots(expr, columns, as_doubles(state.inputs[SLOT_DIRECTION].host))
     ):
         return SCIP_OKAY
     slot: cython.int = ensure(
@@ -824,8 +831,8 @@ def inteval_callback(
         scip,
         expr,
         entry_columns(data),
-        state.inputs[SLOT_LOWER].host,
-        state.inputs[SLOT_UPPER].host,
+        as_doubles(state.inputs[SLOT_LOWER].host),
+        as_doubles(state.inputs[SLOT_UPPER].host),
     ):
         return SCIP_OKAY
     slot: cython.int = ensure(
@@ -863,7 +870,7 @@ def compute_estimator(
     slot: cython.int = ensure(state, data.entry, program, callback, request)
     if slot < 0:
         return False  # pragma: no cover
-    x: cython.p_double = state.inputs[SLOT_X].host
+    x: cython.p_double = as_doubles(state.inputs[SLOT_X].host)
     columns: cython.pointer[cython.int] = entry_columns(data)
     count: cython.int = (
         function.pointers[data.entry + 1] - function.pointers[data.entry]
@@ -913,9 +920,9 @@ def estimate_callback(
     state: cython.pointer[BlockState] = data.state
     function: cython.pointer[BlockFunction] = state.function
     columns: cython.pointer[cython.int] = entry_columns(data)
-    x: cython.p_double = state.inputs[SLOT_X].host
-    lower: cython.p_double = state.inputs[SLOT_LOWER].host
-    upper: cython.p_double = state.inputs[SLOT_UPPER].host
+    x: cython.p_double = as_doubles(state.inputs[SLOT_X].host)
+    lower: cython.p_double = as_doubles(state.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(state.inputs[SLOT_UPPER].host)
     index: cython.int
     is_global: cython.bint = state.switches.global_estimators
     function.statistics.calls[CALLBACK_ESTIMATE] += 1
@@ -972,9 +979,9 @@ def initestimates_callback(
     state: cython.pointer[BlockState] = data.state
     function: cython.pointer[BlockFunction] = state.function
     columns: cython.pointer[cython.int] = entry_columns(data)
-    x: cython.p_double = state.inputs[SLOT_X].host
-    lower: cython.p_double = state.inputs[SLOT_LOWER].host
-    upper: cython.p_double = state.inputs[SLOT_UPPER].host
+    x: cython.p_double = as_doubles(state.inputs[SLOT_X].host)
+    lower: cython.p_double = as_doubles(state.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(state.inputs[SLOT_UPPER].host)
     index: cython.int
     point: cython.int
     fractions: cython.double[NUM_INIT_POINTS] = [0.5, 0.25, 0.75]
@@ -1035,8 +1042,8 @@ def monotonicity_callback(
         scip,
         expr,
         entry_columns(data),
-        state.inputs[SLOT_LOWER].host,
-        state.inputs[SLOT_UPPER].host,
+        as_doubles(state.inputs[SLOT_LOWER].host),
+        as_doubles(state.inputs[SLOT_UPPER].host),
     ):
         return SCIP_OKAY
     slot: cython.int = ensure(
@@ -1075,9 +1082,9 @@ def center_box(
     """Sets the bound inputs to the children's bounds and the `x` input to the box center."""
     state: cython.pointer[BlockState] = data.state
     columns: cython.pointer[cython.int] = entry_columns(data)
-    x: cython.p_double = state.inputs[SLOT_X].host
-    lower: cython.p_double = state.inputs[SLOT_LOWER].host
-    upper: cython.p_double = state.inputs[SLOT_UPPER].host
+    x: cython.p_double = as_doubles(state.inputs[SLOT_X].host)
+    lower: cython.p_double = as_doubles(state.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(state.inputs[SLOT_UPPER].host)
     index: cython.int
     for index in range(count):
         lower[columns[index]] = childrenbounds[index].inf
@@ -1200,7 +1207,7 @@ def copy_state(
 ) -> cython.pointer[BlockState]:
     """Returns a new state for the same block, with its parameters and empty caches."""
     return new_block_state(
-        source.function, source.inputs[SLOT_PARAMS].host, source.switches
+        source.function, as_doubles(source.inputs[SLOT_PARAMS].host), source.switches
     )
 
 
@@ -1436,7 +1443,7 @@ def copy_input(
     """Copies an array into the host memory of an input slot of a block state."""
     check_length("input", values, state.function.n)
     memcpy(
-        state.inputs[slot].host,
+        as_doubles(state.inputs[slot].host),
         cython.address(values[0]),
         state.function.n * cython.sizeof(cython.double),
     )
@@ -1461,7 +1468,6 @@ class BlockHandle:
         columns: cython.int[::1],
         programs: Programs,
     ) -> None:
-        require_runtime()
         rows: cython.int = pointers.shape[0] - 1
         if num_inputs < 1 or rows < 1:
             raise ValueError("A block needs at least one input and one entry")
@@ -1534,7 +1540,9 @@ class BlockHandle:
                 function.slots[index][position] = slot
             function.programs[index].num_outputs = len(sizes)
             for position, size in enumerate(sizes):
-                function.programs[index].output_sizes[position] = size
+                function.programs[index].output_bytes[position] = size * cython.sizeof(
+                    cython.double
+                )
 
     def __dealloc__(self) -> None:
         function: cython.pointer[BlockFunction] = self.function
@@ -1690,9 +1698,9 @@ class BlockHandle:
             raise MemoryError()  # pragma: no cover
         index: cython.int
         for index in range(self.num_inputs):
-            state.inputs[SLOT_LOWER].host[index] = lower[index]
-            state.inputs[SLOT_UPPER].host[index] = upper[index]
-            state.inputs[SLOT_X].host[index] = min(
+            as_doubles(state.inputs[SLOT_LOWER].host)[index] = lower[index]
+            as_doubles(state.inputs[SLOT_UPPER].host)[index] = upper[index]
+            as_doubles(state.inputs[SLOT_X].host)[index] = min(
                 max(reference[index], lower[index]), upper[index]
             )
         data: BlockData

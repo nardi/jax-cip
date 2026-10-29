@@ -1,6 +1,5 @@
 """Tests of the disk cache of lowered programs and executables."""
 
-import os
 from pathlib import Path
 
 import jax
@@ -8,15 +7,13 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from jaxcip import _cache
 from jaxcip._blocks import BlockPattern, LoweredTerm
 from jaxcip._cache import (
+    LOWERED_SUFFIX,
     BuildStatistics,
-    cache_directory,
     compile_program,
     decode_lowered,
     encode_lowered,
-    executable_key,
     load_lowered,
     store_lowered,
 )
@@ -69,55 +66,23 @@ def test_store_and_load(cache_directory: Path) -> None:
     assert load_lowered("missing") is None
     store_lowered("key", PROGRAMS)
     assert load_lowered("key") == PROGRAMS
-    path = cache_directory / "key.lowered"
+    path = cache_directory / f"key{LOWERED_SUFFIX}"
     path.write_bytes(b"broken")
     assert load_lowered("key") is None
     assert not path.exists()
 
 
-def test_cache_directory_default(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Checks that the cache lives under the home directory without the variable."""
-    monkeypatch.delenv(_cache.CACHE_ENVIRONMENT_VARIABLE)
-    monkeypatch.setenv("HOME", str(tmp_path))
-    assert cache_directory() == tmp_path / ".cache" / "jaxcip"
-    assert cache_directory().is_dir()
-
-
-def test_executable_key_needs_a_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Checks that executable keys depend on the loaded plugin."""
-    monkeypatch.setattr(_cache, "plugin_identity", None)
-    with pytest.raises(RuntimeError, match="No PJRT plugin"):
-        executable_key(PROGRAM)
-
-
-def test_executable_key_ignores_locations() -> None:
-    """Checks that programs that differ only in source locations share a key."""
-    shapes = (jax.ShapeDtypeStruct((2,), jnp.float64),)
-    first = lower(lambda x: jnp.sin(x) * 2, shapes)
-
-    second = lower(lambda x: jnp.sin(x) * 2, shapes)
-    assert first.text != second.text
-    assert executable_key(first) == executable_key(second)
-
-
-def test_compile_program_uses_the_disk_cache(cache_directory: Path) -> None:
-    """Checks that executables are stored, loaded, and compiled again when corrupted."""
-    program = lower(jnp.cos, (jax.ShapeDtypeStruct((2,), jnp.float64),))
-    path = cache_directory / f"{executable_key(program)}.pjrt"
-    path.unlink(missing_ok=True)
+def test_compile_program_uses_the_disk_cache() -> None:
+    """Checks that executables are stored, loaded and compiled again without the cache."""
+    program = lower(
+        lambda x: jnp.cos(x) + 3.25, (jax.ShapeDtypeStruct((2,), jnp.float64),)
+    )
     _, statistics = compile_program(program, disk_cache=True)
-    assert statistics.compiled == 1 and path.exists()
+    assert statistics.compiled == 1 and statistics.loaded == 0
     _, statistics = compile_program(program, disk_cache=True)
     assert statistics.loaded == 1 and statistics.compiled == 0
-    path.write_bytes(b"corrupted")
-    _, statistics = compile_program(program, disk_cache=True)
-    assert statistics.compiled == 1
-    assert path.read_bytes() != b"corrupted"
-    modified = os.stat(path).st_mtime_ns
     _, statistics = compile_program(program, disk_cache=False)
-    assert statistics.compiled == 1 and os.stat(path).st_mtime_ns == modified
+    assert statistics.compiled == 1 and statistics.loaded == 0
 
 
 def test_statistics_add() -> None:

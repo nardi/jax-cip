@@ -7,9 +7,10 @@ import numpy as np
 from jaxtyping import Float, Int
 
 if TYPE_CHECKING:
+    from cyxla import Executable
+
     from jaxcip._block import BlockStateRef
     from jaxcip._handler import FunctionHandle
-    from jaxcip._runtime import Executable
 
 
 class Sense(IntEnum):
@@ -172,32 +173,12 @@ class Interval(NamedTuple):
     upper: float | Float[np.ndarray, " n"]
 
 
-class RuntimeInfo(NamedTuple):
-    """Details of the PJRT runtime."""
-
-    api_major_version: int
-    api_minor_version: int
-    platform: str
-    """Platform name that the plugin reports, such as `cpu`."""
-    aliased_inputs: bool
-    """Whether input buffers share host memory, so filling an input needs no copy."""
-    inplace_outputs: bool
-    """Whether outputs are read from the buffers' memory instead of copied to the host."""
-
-
 class ScipVersion(NamedTuple):
     """Version of the linked SCIP library."""
 
     major: int
     minor: int
     technical: int
-
-
-class ErrorInfo(NamedTuple):
-    """PJRT errors recorded since the runtime was initialized."""
-
-    count: int
-    last_message: str
 
 
 class Monotonicity(Enum):

@@ -11,16 +11,20 @@ results, because SCIP often asks for the same value, bounds or estimator again.
 """
 
 import cython
+import cyxla
 import numpy as np
-from cython.cimports.jaxcip._runtime import (
+from cython.cimports.cyxla._pjrt import PJRT_Buffer_Type_F64
+from cython.cimports.cyxla._runtime import (
+    ABI_VERSION,
     MAX_OUTPUTS,
     Executable,
     Input,
     ProgramSpec,
     alias_buffer,
-    aligned_doubles,
+    aligned_memory,
     destroy_buffer,
     execute,
+    free_aligned,
     now,
 )
 from cython.cimports.jaxcip._scip import (
@@ -77,9 +81,9 @@ from cython.cimports.libc.math import NAN, fabs, isfinite, isnan
 from cython.cimports.libc.stdint import uintptr_t
 from cython.cimports.libc.stdlib import free, malloc
 from cython.cimports.libc.string import memcmp, memcpy, memset
+from cyxla._runtime import raise_last_error
 
 from jaxcip._options import HandlerOptions
-from jaxcip._runtime import raise_last_error, require_runtime
 from jaxcip._types import (
     CallbackStatistics,
     Estimator,
@@ -88,6 +92,8 @@ from jaxcip._types import (
     Program,
     Programs,
 )
+
+cyxla.check_abi(ABI_VERSION)
 
 HANDLER_NAME = cython.declare(cython.pointer[cython.const[cython.char]], b"jax")
 """Name of the expression handler in SCIP."""
@@ -121,6 +127,43 @@ def program_slots(
             return (*PROGRAM_SLOTS[program], SLOT_ENCLOSURE)
         case _:
             return PROGRAM_SLOTS[program]
+
+
+@cython.cfunc
+@cython.inline
+@cython.nogil
+@cython.exceptval(check=False)
+def as_doubles(memory: cython.p_void) -> cython.p_double:
+    """Returns host memory of an input or an output as an array of doubles."""
+    return cython.cast(cython.p_double, memory)
+
+
+@cython.cfunc
+@cython.nogil
+@cython.exceptval(check=False)
+def aligned_doubles(count: cython.int) -> cython.p_double:
+    """Returns zeroed memory for `count` doubles, which `free_aligned` frees."""
+    return as_doubles(aligned_memory(count * cython.sizeof(cython.double)))
+
+
+@cython.cfunc
+@cython.nogil
+@cython.exceptval(check=False)
+def create_input(host_input: cython.pointer[Input], count: cython.int) -> cython.void:
+    """Allocates the host array of an input of `count` doubles and aliases a buffer to it."""
+    host_input.host = aligned_doubles(count)
+    host_input.type = PJRT_Buffer_Type_F64
+    host_input.size = count
+    host_input.buffer = alias_buffer(host_input.host, PJRT_Buffer_Type_F64, count)
+
+
+@cython.cfunc
+@cython.nogil
+@cython.exceptval(check=False)
+def destroy_input(host_input: cython.pointer[Input]) -> cython.void:
+    """Frees the buffer and the host array of an input."""
+    destroy_buffer(host_input.buffer)
+    free_aligned(host_input.host)
 
 
 def output_sizes(
@@ -177,8 +220,8 @@ def choose_enclosure(data: cython.pointer[ExprData]) -> cython.void:
     function: cython.pointer[Function] = data.function
     n: cython.int = function.n
     size: cython.int = function.enclosure_size
-    lower: cython.p_double = function.inputs[SLOT_LOWER].host
-    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    lower: cython.p_double = as_doubles(function.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(function.inputs[SLOT_UPPER].host)
     best: cython.int = -1
     best_width: cython.double = 0.0
     width: cython.double
@@ -200,13 +243,13 @@ def choose_enclosure(data: cython.pointer[ExprData]) -> cython.void:
             best_width = width
     if best >= 0:
         memcpy(
-            data.enclosure.host,
+            as_doubles(data.enclosure.host),
             data.box_enclosures + size * best,
             size * cython.sizeof(cython.double),
         )
     else:
         for index in range(size):
-            data.enclosure.host[index] = NAN
+            as_doubles(data.enclosure.host)[index] = NAN
 
 
 @cython.cfunc
@@ -225,8 +268,8 @@ def remember_enclosure(data: cython.pointer[ExprData]) -> cython.void:
     key: cython.p_double
     if not all_finite(data.enclosure_next, size):
         return
-    lower: cython.p_double = function.inputs[SLOT_LOWER].host
-    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    lower: cython.p_double = as_doubles(function.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(function.inputs[SLOT_UPPER].host)
     slot: cython.int = -1
     for index in range(data.box_count):
         key = data.box_keys + 2 * n * index
@@ -289,7 +332,7 @@ def run(
     ) and spec.num_outputs > 2
     if has_enclosures:
         choose_enclosure(data)
-    outputs: cython.p_double[MAX_OUTPUTS]
+    outputs: cython.p_void[MAX_OUTPUTS]
     outputs[0] = first
     outputs[1] = second
     outputs[2] = (
@@ -305,7 +348,7 @@ def run(
         # The roots a run found are the guesses of the next run.
         if has_state:
             memcpy(
-                data.state.host,
+                as_doubles(data.state.host),
                 data.state_next,
                 function.state_size * cython.sizeof(cython.double),
             )
@@ -345,33 +388,27 @@ def new_expr_data(
     memset(data, 0, cython.sizeof(ExprData))
     data.function = function
     data.switches = switches
-    data.params.host = aligned_doubles(m)
-    data.params.size = m
+    create_input(cython.address(data.params), m)
     memcpy(data.params.host, params, m * cython.sizeof(cython.double))
-    data.params.buffer = alias_buffer(data.params.host, m)
     # The warm start begins as NaN, which stands for the guess written in the function.
     k: cython.int = function.state_size
     index: cython.int
     if k > 0:
-        data.state.host = aligned_doubles(k)
-        data.state.size = k
-        data.state.buffer = alias_buffer(data.state.host, k)
+        create_input(cython.address(data.state), k)
         data.state_next = aligned_doubles(k)
         for index in range(k):
-            data.state.host[index] = NAN
+            as_doubles(data.state.host)[index] = NAN
             data.state_next[index] = NAN
 
     # The enclosures of the roots begin as NaN too, and the store of boxes is empty.
     size: cython.int = function.enclosure_size
     if size > 0:
-        data.enclosure.host = aligned_doubles(size)
-        data.enclosure.size = size
-        data.enclosure.buffer = alias_buffer(data.enclosure.host, size)
+        create_input(cython.address(data.enclosure), size)
         data.enclosure_next = aligned_doubles(size)
         data.box_keys = aligned_doubles(BOX_STORE_SIZE * 2 * n)
         data.box_enclosures = aligned_doubles(BOX_STORE_SIZE * size)
         for index in range(size):
-            data.enclosure.host[index] = NAN
+            as_doubles(data.enclosure.host)[index] = NAN
             data.enclosure_next[index] = NAN
 
     # All caches live in one block, laid out one after another.
@@ -420,18 +457,15 @@ def new_expr_data(
 @cython.exceptval(check=False)
 def free_expr_data(data: cython.pointer[ExprData]) -> cython.void:
     """Frees expression data and its parameter buffer."""
-    destroy_buffer(data.params.buffer)
-    free(data.params.host)
+    destroy_input(cython.address(data.params))
     if data.function.state_size > 0:
-        destroy_buffer(data.state.buffer)
-        free(data.state.host)
-        free(data.state_next)
+        destroy_input(cython.address(data.state))
+        free_aligned(data.state_next)
     if data.function.enclosure_size > 0:
-        destroy_buffer(data.enclosure.buffer)
-        free(data.enclosure.host)
-        free(data.enclosure_next)
-        free(data.box_keys)
-        free(data.box_enclosures)
+        destroy_input(cython.address(data.enclosure))
+        free_aligned(data.enclosure_next)
+        free_aligned(data.box_keys)
+        free_aligned(data.box_enclosures)
     free(data.cache_block)
     free(data)
 
@@ -474,7 +508,7 @@ def eval_callback(
     """Evaluates the function at the children's values."""
     data: cython.pointer[ExprData] = get_data(expr)
     function: cython.pointer[Function] = data.function
-    x: cython.p_double = function.inputs[SLOT_X].host
+    x: cython.p_double = as_doubles(function.inputs[SLOT_X].host)
     n: cython.int = function.n
     index: cython.int
     function.statistics.calls[CALLBACK_EVAL] += 1
@@ -514,7 +548,7 @@ def ensure_gradient(
     execution serves all of them at the same point.
     """
     function: cython.pointer[Function] = data.function
-    x: cython.p_double = function.inputs[SLOT_X].host
+    x: cython.p_double = as_doubles(function.inputs[SLOT_X].host)
     n: cython.int = function.n
     if data.gradient_valid and same(x, data.gradient_key, n):
         function.statistics.hits[callback] += 1
@@ -566,9 +600,9 @@ def bwdiff_callback(
     data: cython.pointer[ExprData] = get_data(expr)
     data.function.statistics.calls[CALLBACK_BWDIFF] += 1
     val[0] = SCIP_INVALID
-    if read_child_values(expr, data.function.inputs[SLOT_X].host) and ensure_gradient(
-        data, CALLBACK_BWDIFF
-    ):
+    if read_child_values(
+        expr, as_doubles(data.function.inputs[SLOT_X].host)
+    ) and ensure_gradient(data, CALLBACK_BWDIFF):
         val[0] = data.gradient[childidx]
     return SCIP_OKAY
 
@@ -602,13 +636,13 @@ def fwdiff_callback(
     """Returns the directional derivative along the children's derivatives, from the gradient."""
     data: cython.pointer[ExprData] = get_data(expr)
     function: cython.pointer[Function] = data.function
-    dots: cython.p_double = function.inputs[SLOT_DIRECTION].host
+    dots: cython.p_double = as_doubles(function.inputs[SLOT_DIRECTION].host)
     index: cython.int
     total: cython.double = 0.0
     function.statistics.calls[CALLBACK_FWDIFF] += 1
     dot[0] = SCIP_INVALID
     if (
-        not read_child_values(expr, function.inputs[SLOT_X].host)
+        not read_child_values(expr, as_doubles(function.inputs[SLOT_X].host))
         or not read_child_dots(expr, dots)
         or not ensure_gradient(data, CALLBACK_FWDIFF)
     ):
@@ -639,8 +673,8 @@ def bwfwdiff_callback(
     """
     data: cython.pointer[ExprData] = get_data(expr)
     function: cython.pointer[Function] = data.function
-    x: cython.p_double = function.inputs[SLOT_X].host
-    dots: cython.p_double = function.inputs[SLOT_DIRECTION].host
+    x: cython.p_double = as_doubles(function.inputs[SLOT_X].host)
+    dots: cython.p_double = as_doubles(function.inputs[SLOT_DIRECTION].host)
     n: cython.int = function.n
     function.statistics.calls[CALLBACK_BWFWDIFF] += 1
     bardot[0] = SCIP_INVALID
@@ -717,8 +751,8 @@ def inteval_callback(
     """Encloses the function's range over the children's activities."""
     data: cython.pointer[ExprData] = get_data(expr)
     function: cython.pointer[Function] = data.function
-    lower: cython.p_double = function.inputs[SLOT_LOWER].host
-    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    lower: cython.p_double = as_doubles(function.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(function.inputs[SLOT_UPPER].host)
     n: cython.int = function.n
     index: cython.int
     key: cython.p_double
@@ -793,9 +827,9 @@ def compute_estimator(
     the concave relaxation. Returns whether the estimator is finite with coefficients in range.
     """
     function: cython.pointer[Function] = data.function
-    x: cython.p_double = function.inputs[SLOT_X].host
-    lower: cython.p_double = function.inputs[SLOT_LOWER].host
-    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    x: cython.p_double = as_doubles(function.inputs[SLOT_X].host)
+    lower: cython.p_double = as_doubles(function.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(function.inputs[SLOT_UPPER].host)
     n: cython.int = function.n
     size: cython.size_t = n * cython.sizeof(cython.double)
     index: cython.int
@@ -867,9 +901,9 @@ def estimate_callback(
     """Returns a linear under- or overestimator from a relaxation over the local box."""
     data: cython.pointer[ExprData] = get_data(expr)
     function: cython.pointer[Function] = data.function
-    x: cython.p_double = function.inputs[SLOT_X].host
-    lower: cython.p_double = function.inputs[SLOT_LOWER].host
-    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    x: cython.p_double = as_doubles(function.inputs[SLOT_X].host)
+    lower: cython.p_double = as_doubles(function.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(function.inputs[SLOT_UPPER].host)
     index: cython.int
     is_global: cython.bint = data.switches.global_estimators
     function.statistics.calls[CALLBACK_ESTIMATE] += 1
@@ -915,9 +949,9 @@ def initestimates_callback(
     """Returns estimators at the box center and at two points on its diagonal, for the initial LP."""
     data: cython.pointer[ExprData] = get_data(expr)
     function: cython.pointer[Function] = data.function
-    x: cython.p_double = function.inputs[SLOT_X].host
-    lower: cython.p_double = function.inputs[SLOT_LOWER].host
-    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    x: cython.p_double = as_doubles(function.inputs[SLOT_X].host)
+    lower: cython.p_double = as_doubles(function.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(function.inputs[SLOT_UPPER].host)
     index: cython.int
     point: cython.int
     fractions: cython.double[NUM_INIT_POINTS] = [0.5, 0.25, 0.75]
@@ -958,8 +992,8 @@ def monotonicity_callback(
     """Reports monotonicity in one child from bounds on the gradient over the children's activities."""
     data: cython.pointer[ExprData] = get_data(expr)
     function: cython.pointer[Function] = data.function
-    lower: cython.p_double = function.inputs[SLOT_LOWER].host
-    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    lower: cython.p_double = as_doubles(function.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(function.inputs[SLOT_UPPER].host)
     n: cython.int = function.n
     index: cython.int
     children: cython.pointer[cython.pointer[SCIP_EXPR]] = SCIPexprGetChildren(expr)
@@ -1064,9 +1098,9 @@ def center_box(
     function: cython.pointer[Function], childrenbounds: cython.pointer[SCIP_INTERVAL]
 ) -> cython.void:
     """Sets the bound inputs to the children's bounds and the `x` input to the box center."""
-    x: cython.p_double = function.inputs[SLOT_X].host
-    lower: cython.p_double = function.inputs[SLOT_LOWER].host
-    upper: cython.p_double = function.inputs[SLOT_UPPER].host
+    x: cython.p_double = as_doubles(function.inputs[SLOT_X].host)
+    lower: cython.p_double = as_doubles(function.inputs[SLOT_LOWER].host)
+    upper: cython.p_double = as_doubles(function.inputs[SLOT_UPPER].host)
     index: cython.int
     for index in range(function.n):
         lower[index] = childrenbounds[index].inf
@@ -1166,7 +1200,7 @@ def getsymdata_callback(
         cython.double, cython.cast(uintptr_t, data.function) % 1000003
     )
     for index in range(m):
-        description.constants[index + 1] = data.params.host[index]
+        description.constants[index + 1] = as_doubles(data.params.host)[index]
     for index in range(n):
         description.coefficients[index] = index + 1.0
         description.children[index] = SCIPexprGetChildren(expr)[index]
@@ -1186,7 +1220,7 @@ def copydata_callback(
     """Copies the expression data into a copy of SCIP, sharing the function with empty caches."""
     source: cython.pointer[ExprData] = get_data(sourceexpr)
     copy: cython.pointer[ExprData] = new_expr_data(
-        source.function, source.params.host, source.switches
+        source.function, as_doubles(source.params.host), source.switches
     )
     if copy == cython.NULL:
         return SCIP_NOMEMORY  # pragma: no cover
@@ -1226,9 +1260,11 @@ def compare_callback(
             < cython.cast(uintptr_t, second.function)
             else 1
         )
+    first_params: cython.p_double = as_doubles(first.params.host)
+    second_params: cython.p_double = as_doubles(second.params.host)
     for index in range(first.function.m):
-        if first.params.host[index] != second.params.host[index]:
-            return -1 if first.params.host[index] < second.params.host[index] else 1
+        if first_params[index] != second_params[index]:
+            return -1 if first_params[index] < second_params[index] else 1
     for index in range(first.function.n):
         order = SCIPcompareExpr(
             scip, SCIPexprGetChildren(expr1)[index], SCIPexprGetChildren(expr2)[index]
@@ -1258,7 +1294,7 @@ def hash_callback(
     for index in range(data.function.m):
         memcpy(
             cython.address(bits),
-            cython.address(data.params.host[index]),
+            cython.address(as_doubles(data.params.host)[index]),
             cython.sizeof(bits),
         )
         key = key * 31 + cython.cast(cython.uint, bits ^ (bits >> 32))
@@ -1362,7 +1398,6 @@ class FunctionHandle:
         state_size: cython.int = 0,
         enclosure_size: cython.int = 0,
     ) -> None:
-        require_runtime()
         if num_inputs < 1:
             raise ValueError("A function needs at least one input")
         if state_size < 0 or enclosure_size < 0:
@@ -1386,11 +1421,7 @@ class FunctionHandle:
         function.scratch = aligned_doubles(num_inputs)
         slot: cython.int
         for slot in range(SLOT_PARAMS):
-            function.inputs[slot].host = aligned_doubles(num_inputs)
-            function.inputs[slot].size = num_inputs
-            function.inputs[slot].buffer = alias_buffer(
-                function.inputs[slot].host, num_inputs
-            )
+            create_input(cython.address(function.inputs[slot]), num_inputs)
 
         executable: Executable
         index: cython.int
@@ -1415,7 +1446,9 @@ class FunctionHandle:
                 function.slots[index][position] = slot
             function.programs[index].num_outputs = len(sizes)
             for position, size in enumerate(sizes):
-                function.programs[index].output_sizes[position] = size
+                function.programs[index].output_bytes[position] = size * cython.sizeof(
+                    cython.double
+                )
 
     def __dealloc__(self) -> None:
         function: cython.pointer[Function] = self.function
@@ -1423,9 +1456,8 @@ class FunctionHandle:
         if function == cython.NULL:
             return  # pragma: no cover
         for slot in range(SLOT_PARAMS):
-            destroy_buffer(function.inputs[slot].buffer)
-            free(function.inputs[slot].host)
-        free(function.scratch)
+            destroy_input(cython.address(function.inputs[slot]))
+        free_aligned(function.scratch)
         free(function)
 
     def statistics(self) -> HandlerStatistics:
@@ -1449,7 +1481,7 @@ class FunctionHandle:
         """Copies an array into the host memory of an input slot."""
         check_length("input", values, self.num_inputs)
         memcpy(
-            self.function.inputs[slot].host,
+            as_doubles(self.function.inputs[slot].host),
             cython.address(values[0]),
             self.num_inputs * cython.sizeof(cython.double),
         )
@@ -1497,7 +1529,7 @@ class FunctionHandle:
             check_length("start", initial, self.state_size)
             first: cython.double[::1] = initial
             memcpy(
-                data.state.host,
+                as_doubles(data.state.host),
                 cython.address(first[0]),
                 self.state_size * cython.sizeof(cython.double),
             )
@@ -1524,7 +1556,7 @@ class FunctionHandle:
             if self.state_size > 0:
                 memcpy(
                     cython.address(state_view[0]),
-                    data.state.host,
+                    as_doubles(data.state.host),
                     self.state_size * cython.sizeof(cython.double),
                 )
             results.append((value, state.copy()))
@@ -1568,12 +1600,12 @@ class FunctionHandle:
         status: cython.int
         for box in range(lower.shape[0]):
             memcpy(
-                self.function.inputs[SLOT_LOWER].host,
+                as_doubles(self.function.inputs[SLOT_LOWER].host),
                 cython.address(lower[box, 0]),
                 size,
             )
             memcpy(
-                self.function.inputs[SLOT_UPPER].host,
+                as_doubles(self.function.inputs[SLOT_UPPER].host),
                 cython.address(upper[box, 0]),
                 size,
             )
@@ -1591,7 +1623,7 @@ class FunctionHandle:
             if self.enclosure_size > 0:
                 memcpy(
                     cython.address(started_view[0]),
-                    data.enclosure.host,
+                    as_doubles(data.enclosure.host),
                     self.enclosure_size * cython.sizeof(cython.double),
                 )
                 memcpy(
@@ -1631,7 +1663,7 @@ class FunctionHandle:
         check_length("reference", reference, self.num_inputs)
         self.set_input(SLOT_LOWER, lower)
         self.set_input(SLOT_UPPER, upper)
-        x: cython.p_double = self.function.inputs[SLOT_X].host
+        x: cython.p_double = as_doubles(self.function.inputs[SLOT_X].host)
         index: cython.int
         for index in range(self.num_inputs):
             x[index] = min(max(reference[index], lower[index]), upper[index])
@@ -1722,8 +1754,10 @@ class FunctionHandle:
         first: cython.p_double = aligned_doubles(self.num_inputs + 1)
         second: cython.p_double = aligned_doubles(self.num_inputs + 1)
         size: cython.size_t = self.num_inputs * cython.sizeof(cython.double)
-        x: cython.p_double = self.function.inputs[SLOT_X].host
-        direction: cython.p_double = self.function.inputs[SLOT_DIRECTION].host
+        x: cython.p_double = as_doubles(self.function.inputs[SLOT_X].host)
+        direction: cython.p_double = as_doubles(
+            self.function.inputs[SLOT_DIRECTION].host
+        )
         count: cython.int = points.shape[0]
         status: cython.int = 0
         round_index: cython.int
@@ -1738,8 +1772,8 @@ class FunctionHandle:
                     memcpy(direction, cython.address(points[point, 0]), size)
                     status |= run(data, index, first, second, CALLBACK_EVAL)
             elapsed = now() - start
-        free(first)
-        free(second)
+        free_aligned(first)
+        free_aligned(second)
         free_expr_data(data)
         if status != 0:
             raise_last_error(program.name.lower())  # pragma: no cover

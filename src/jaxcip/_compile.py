@@ -16,9 +16,11 @@ from types import TracebackType
 from typing import Any, NamedTuple, Self
 
 import asdex
+import cyxla
 import jax
 import jax.numpy as jnp
 import numpy as np
+from cyxla import Executable
 from jaxtyping import Array, Float, Int, PyTree
 
 from jaxcip import _cache
@@ -39,7 +41,6 @@ from jaxcip._programs import (
     lower_programs,
     term_signature,
 )
-from jaxcip._runtime import Executable
 from jaxcip._types import Domain, Programs
 
 COMPILED_TERMS_LIMIT = 64
@@ -392,7 +393,7 @@ def compile(  # noqa: A001
     shapes and types matter. The result solves with any parameter values of that layout.
     """
     _cache.enable_x64()
-    _cache.initialize()
+    cyxla.initialize(platform="cpu")
     start = time.perf_counter()
     variables = variable_layout(problem.variables)
     leaves, structure = jax.tree.flatten(params)

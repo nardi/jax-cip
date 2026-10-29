@@ -1,7 +1,7 @@
 """JAX functions as nonlinear expressions in the SCIP optimization solver."""
 
 from jaxcip import _cache, _compile
-from jaxcip._cache import BuildStatistics, initialize
+from jaxcip._cache import BuildStatistics
 from jaxcip._compile import CompiledProblem, compile  # noqa: A004
 from jaxcip._options import (
     CompileOptions,
@@ -27,7 +27,6 @@ from jaxcip._types import (
     Domain,
     Emphasis,
     HandlerStatistics,
-    RuntimeInfo,
     ScipVersion,
     Sense,
     Status,
@@ -60,7 +59,6 @@ __all__ = [
     "RelaxationMode",
     "RelaxationOptions",
     "RowFunction",
-    "RuntimeInfo",
     "ScipParameter",
     "ScipSetting",
     "ScipVersion",
@@ -72,7 +70,6 @@ __all__ = [
     "Verbosity",
     "clear_caches",
     "compile",
-    "initialize",
     "rows",
     "scip_version",
     "solve",
