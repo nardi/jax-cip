@@ -4,6 +4,7 @@ from pathlib import Path
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from test_affine import affine_cases, dense_matrix, problem_of
 
 import jaxcip as jcp
@@ -11,6 +12,13 @@ from jaxcip._cache import AFFINE_SUFFIX
 
 PARAMS = jnp.array([0.5, -1.5, 2.0, 0.25, 3.0])
 """Parameter values of the test problems."""
+
+
+@pytest.fixture
+def cache_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Returns an empty disk cache directory, so that other tests have not filled it."""
+    monkeypatch.setenv("CYXLA_CACHE_DIR", str(tmp_path))
+    return tmp_path
 
 
 def test_warm_build_skips_detection_and_lowering(cache_directory: Path) -> None:
@@ -52,11 +60,13 @@ def test_damaged_cache_files_are_rebuilt(cache_directory: Path) -> None:
     options = jcp.CompileOptions(threads=1)
     before = set(cache_directory.glob(f"*{AFFINE_SUFFIX}"))
     reference = jcp.compile(problem, PARAMS, options)
-    (damaged,) = set(cache_directory.glob(f"*{AFFINE_SUFFIX}")) - before
-    damaged.write_bytes(b"not an archive")
+    damaged = set(cache_directory.glob(f"*{AFFINE_SUFFIX}")) - before
+    assert damaged
+    for path in damaged:
+        path.write_bytes(b"not an archive")
     jcp.clear_caches()
     rebuilt = jcp.compile(problem, PARAMS, options)
-    assert damaged.read_bytes() != b"not an archive"
+    assert all(path.read_bytes() != b"not an archive" for path in damaged)
     np.testing.assert_allclose(
         dense_matrix(rebuilt.constraints[0], rebuilt, PARAMS)[1],
         dense_matrix(reference.constraints[0], reference, PARAMS)[1],
