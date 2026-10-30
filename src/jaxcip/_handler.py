@@ -13,12 +13,12 @@ results, because SCIP often asks for the same value, bounds or estimator again.
 import cython
 import cyxla
 import numpy as np
-from cython.cimports.cyxla._pjrt import PJRT_Buffer_Type_F64
-from cython.cimports.cyxla._runtime import (
+from cython.cimports.cyxla import (
     ABI_VERSION,
     MAX_OUTPUTS,
     Executable,
     Input,
+    PJRT_Buffer_Type_F64,
     ProgramSpec,
     alias_buffer,
     aligned_memory,
@@ -81,7 +81,7 @@ from cython.cimports.libc.math import NAN, fabs, isfinite, isnan
 from cython.cimports.libc.stdint import uintptr_t
 from cython.cimports.libc.stdlib import free, malloc
 from cython.cimports.libc.string import memcmp, memcpy, memset
-from cyxla._runtime import raise_last_error
+from cyxla import raise_last_error
 
 from jaxcip._options import HandlerOptions
 from jaxcip._types import (

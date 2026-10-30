@@ -1,4 +1,4 @@
-from cyxla._runtime cimport Input, MAX_INPUTS, ProgramSpec
+from cyxla cimport Input, MAX_INPUTS, ProgramSpec
 from jaxcip._scip cimport SCIP, SCIP_EXPR, SCIP_INTERVAL, SCIP_RETCODE
 
 

@@ -176,21 +176,17 @@ def test_trees_are_checked_against_the_file() -> None:
     assert jcp.loads(data, good, params).params.fingerprint
 
 
-def test_a_file_from_another_machine_is_compiled_again(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_a_file_from_another_machine_is_compiled_again() -> None:
     """Checks the fallback for a fingerprint that the file has no executable for."""
     compiled = jcp.compile(parametric_problem(), PARAMETERS)
     data = jcp.dumps(compiled)
     template, params = parametric_template()
-    real = cyxla.target_fingerprint()
-    monkeypatch.setattr(
-        "cyxla._targets.target_fingerprint", lambda: real._replace(machine="other")
-    )
+    other = cyxla.target_fingerprint()._replace(machine="other")
     jcp.clear_caches()
-    with pytest.raises(cyxla.TargetMismatchError):
-        jcp.loads(data, template, params, on_mismatch="raise")
-    loaded = jcp.loads(data, template, params)
+    with cyxla.override_target(other):
+        with pytest.raises(cyxla.TargetMismatchError):
+            jcp.loads(data, template, params, on_mismatch="raise")
+        loaded = jcp.loads(data, template, params)
     assert loaded.statistics.compiled > 0
     assert loaded.statistics.loaded == 0
     first = jcp.solve(compiled, PARAMETERS, options=OPTIONS)

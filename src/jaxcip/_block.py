@@ -15,7 +15,7 @@ solves in different threads never share an input.
 import cython
 import cyxla
 import numpy as np
-from cython.cimports.cyxla._runtime import (
+from cython.cimports.cyxla import (
     ABI_VERSION,
     MAX_OUTPUTS,
     Executable,
@@ -121,7 +121,7 @@ from cython.cimports.libc.math import fabs, isfinite, isnan
 from cython.cimports.libc.stdint import uintptr_t
 from cython.cimports.libc.stdlib import calloc, free, malloc, realloc
 from cython.cimports.libc.string import memcpy, memset
-from cyxla._runtime import raise_last_error
+from cyxla import raise_last_error
 
 from jaxcip._options import HandlerOptions
 from jaxcip._types import (

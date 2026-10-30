@@ -1,4 +1,4 @@
-from cyxla._runtime cimport Input, MAX_INPUTS, ProgramSpec
+from cyxla cimport Input, MAX_INPUTS, ProgramSpec
 from jaxcip._handler cimport NUM_PROGRAMS, Statistics, Switches
 from jaxcip._scip cimport ExprIntevalVar, SCIP, SCIP_EXPR, SCIP_RETCODE, SCIP_SOL, SCIP_VAR
 

@@ -20,8 +20,10 @@ import jaxcip as jcp
 
 problem = jcp.Problem(
     variables={"position": jcp.Variable(lower=-2.0, upper=2.0, shape=(2,))},
-    objective=lambda x, params: jnp.sum(x["position"] ** 4 - 2 * x["position"] ** 2)
-    + jnp.dot(x["position"], params["target"]),
+    objective=lambda x, params: (
+        jnp.sum(x["position"] ** 4 - 2 * x["position"] ** 2)
+        + jnp.dot(x["position"], params["target"])
+    ),
     constraints=(jcp.Constraint(lambda x, params: jnp.sum(x["position"]), upper=1.0),),
 )
 params = {"target": np.array([1.0, 1.0])}
