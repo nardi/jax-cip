@@ -34,6 +34,7 @@ def parametric_template() -> tuple[object, Parameters]:
     return template, Parameters(weight=jnp.zeros(()), centre=jnp.zeros(2))
 
 
+@pytest.mark.integration
 def test_loaded_problem_solves_like_the_original(tmp_path: Path) -> None:
     """Checks that a saved problem gives the same solution after loading."""
     compiled = jcp.compile(parametric_problem(), PARAMETERS)
@@ -55,6 +56,7 @@ def test_loaded_problem_solves_like_the_original(tmp_path: Path) -> None:
     assert second.x.count == first.x.count
 
 
+@pytest.mark.integration
 def test_a_loaded_problem_takes_other_parameters() -> None:
     """Checks that the parameters of a loaded problem are not fixed by the file."""
     compiled = jcp.compile(parametric_problem(), PARAMETERS)
@@ -156,6 +158,22 @@ def test_parameters_can_be_shape_structs() -> None:
     assert solution.objective == pytest.approx(0.0, abs=1e-5)
 
 
+def test_a_file_round_trip(tmp_path: Path) -> None:
+    """Checks `save` and `load` with a small problem, through a file on disk."""
+    problem = jcp.Problem(
+        variables=jcp.Variable(lower=-2.0, upper=2.0, shape=(2,)),
+        objective=lambda x, p: jnp.sum(x**4 - 2 * x**2) + x[0],
+    )
+    compiled = jcp.compile(problem)
+    path = tmp_path / "small.jcp"
+    jcp.save(compiled, path)
+    loaded = jcp.load(path, problem.variables, warm_up=False)
+    assert loaded.statistics.compiled == 0
+    first = jcp.solve(compiled, options=OPTIONS)
+    second = jcp.solve(loaded, options=OPTIONS)
+    assert second.objective == pytest.approx(first.objective, abs=1e-5)
+
+
 def test_trees_are_checked_against_the_file() -> None:
     """Checks the errors for variables and parameters that do not match."""
     problem = jcp.Problem(
@@ -241,6 +259,7 @@ def test_arrays_can_stand_in_for_variables() -> None:
     assert isinstance(second.x, Pair)
 
 
+@pytest.mark.integration
 def test_another_process_loads_without_the_problem(tmp_path: Path) -> None:
     """Checks that a fresh process solves a saved problem without detection or tracing."""
     compiled = jcp.compile(parametric_problem(), PARAMETERS)

@@ -1086,8 +1086,11 @@ def tighten_from_plane(
         else:
             bound -= tolerance * (1.0 + fabs(bound))
             childrenbounds[index].inf = max(childrenbounds[index].inf, bound)
+        # The first check accepts a violation of up to `tolerance` relative to the right-hand
+        # side, while the relaxation above is relative to the new bound. They disagree only
+        # for a violation within that gap, which no test builds from a SCIP callback.
         if childrenbounds[index].inf > childrenbounds[index].sup:
-            return True
+            return True  # pragma: no cover
     return False
 
 

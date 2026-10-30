@@ -123,6 +123,7 @@ def native() -> dict[str, jcp.FileSolution]:
     return solutions
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("configuration", sorted(CONFIGURATIONS))
 @pytest.mark.parametrize("name", sorted(PROBLEMS))
 def test_native_optimum(
@@ -141,6 +142,34 @@ def test_native_optimum(
     assert solution.dual_bound <= solution.objective + RELATIVE_TOLERANCE
     assert solution.gap <= 1e-4
     assert solution.nodes >= 0 and solution.solving_seconds >= 0
+
+
+@pytest.mark.parametrize("name", sorted(PROBLEMS))
+def test_default_options_prove_the_native_optimum(
+    name: str, native: dict[str, jcp.FileSolution]
+) -> None:
+    """Checks the optimum of each test problem with the default options."""
+    solution = jcp.solve(PROBLEMS[name], options=jcp.SolveOptions(time_limit=120.0))
+    assert solution.status is jcp.Status.OPTIMAL
+    assert solution.objective == pytest.approx(
+        native[name].objective, rel=RELATIVE_TOLERANCE, abs=RELATIVE_TOLERANCE
+    )
+
+
+@pytest.mark.parametrize("switch", ["init_estimates", "reverse_propagation"])
+def test_switched_off_callbacks_still_prove_the_optimum(
+    switch: str, native: dict[str, jcp.FileSolution]
+) -> None:
+    """Checks that the callbacks which only help SCIP can be switched off."""
+    solution = jcp.solve(
+        PROBLEMS["camel"],
+        options=jcp.SolveOptions(time_limit=120.0),
+        compile_options=CONFIGURATIONS[f"no_{switch}"],
+    )
+    assert solution.status is jcp.Status.OPTIMAL
+    assert solution.objective == pytest.approx(
+        native["camel"].objective, rel=RELATIVE_TOLERANCE, abs=RELATIVE_TOLERANCE
+    )
 
 
 def test_solution_structure() -> None:
@@ -192,6 +221,7 @@ def parametric_problem() -> jcp.Problem:
     )
 
 
+@pytest.mark.integration
 def test_compile_once_solve_many() -> None:
     """Checks that one compiled problem solves for several parameter values."""
     problem = parametric_problem()
@@ -231,6 +261,7 @@ def distinct_terms_problem() -> jcp.Problem:
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("threads", [1, 2, None])
 def test_threads_build_the_same_terms(threads: int | None) -> None:
     """Checks that the number of build threads changes neither the terms nor the result."""
@@ -462,6 +493,7 @@ def cubic_root(x: jax.Array) -> jax.Array:
     return lax.custom_root(residual, 0.0, newton, tangent_solve)
 
 
+@pytest.mark.integration
 def test_implicit_root_term() -> None:
     """Checks that a root found by `lax.custom_root` compiles and solves in the PJRT plugin.
 
@@ -535,6 +567,7 @@ def test_invalid_constraint() -> None:
         jcp.compile(problem)
 
 
+@pytest.mark.integration
 def test_linear_algebra_kernel_in_a_term() -> None:
     """Checks that a term with a LAPACK kernel compiles and solves."""
     matrix = jnp.array([[4.0, 1.0], [1.0, 3.0]])

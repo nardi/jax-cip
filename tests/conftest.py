@@ -24,6 +24,22 @@ DOMAIN_UPPER = 2.0
 """Upper bound of every coordinate of the test domain."""
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Marks every test that is not `integration` as `unit`.
+
+    The code blocks of the README and of the documentation, and the MINLPLib instances, are
+    integration tests too.
+    """
+    for item in items:
+        outside_tests = (
+            item.path.suffix == ".md" or item.path.name == "test_minlplib.py"
+        )
+        if outside_tests:
+            item.add_marker(pytest.mark.integration)
+        if item.get_closest_marker("integration") is None:
+            item.add_marker(pytest.mark.unit)
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Adds the options that select and limit the MINLPLib instances to solve."""
     parser.addoption(

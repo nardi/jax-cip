@@ -47,6 +47,14 @@ uv pip install --no-config --no-deps --no-build-isolation --reinstall -e . \
 uv run --no-sync pytest benchmarks -o addopts="" --benchmark-only
 ```
 
+## Tests
+
+The tests have two groups. The unit tests solve small problems and cover all the code, and
+`uv run pytest -m unit` runs only them. The integration tests compare configurations with
+native SCIP, run longer solves and start new processes. The code blocks of the README and
+of these pages count as integration tests as well, and `uv run pytest -m integration`
+runs them. The MINLPLib instances need the `--minlplib` option.
+
 ## Environment variables
 
 | Variable | Meaning |

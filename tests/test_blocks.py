@@ -283,6 +283,7 @@ def scalar_rows(name: str, upper: float) -> jcp.Problem:
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("name", ["neighbours", "mixed", "scaled", "elementwise"])
 def test_a_block_solves_like_its_scalar_rows(name: str) -> None:
     """Checks that a vector constraint has the optimum of the same rows written one by one."""
@@ -338,6 +339,7 @@ def test_a_copy_of_scip_gets_its_own_state(name: str) -> None:
     assert copied_bound == pytest.approx(scip.primal_bound, rel=1e-5, abs=1e-6)
 
 
+@pytest.mark.integration
 def test_solves_in_threads_agree_with_sequential_solves() -> None:
     """Checks that solves of one compiled problem in different threads share no inputs."""
     problem = jcp.Problem(
@@ -624,6 +626,7 @@ def test_overflowing_relaxations_in_a_block() -> None:
     assert solution.objective == pytest.approx(1.0, abs=1e-5)
 
 
+@pytest.mark.integration
 def test_steep_estimators_in_a_block() -> None:
     """Checks a block whose estimators have coefficients too large for SCIP's LP.
 

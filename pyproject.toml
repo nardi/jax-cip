@@ -56,7 +56,14 @@ jaxormick = { git = "https://github.com/nardi/jaxormick", rev = "06d12d85fcc6cc1
 testpaths = ["tests", "docs", "README.md"]
 # Benchmarks and the MINLPLib suite run separately, so a plain `pytest` stays fast.
 addopts = "--benchmark-skip"
-markers = ["minlplib: solves MINLPLib instances, selected with `--minlplib`"]
+# Unit tests run in seconds each and cover all the code. Integration tests run longer
+# solves, compare configurations with native SCIP, start new processes or run the
+# documentation.
+markers = [
+    "unit: fast tests of single parts, which together cover all the code",
+    "integration: slower tests across the whole library and against other software",
+    "minlplib: solves MINLPLib instances, selected with `--minlplib`",
+]
 
 [tool.coverage.run]
 branch = true
