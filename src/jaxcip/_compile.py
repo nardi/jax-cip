@@ -26,7 +26,13 @@ from jaxtyping import Array, Float, Int, PyTree
 from jaxcip import _cache
 from jaxcip._analysis import Analysis, Origin, Term, analyse, evaluate_term
 from jaxcip._block import BlockHandle
-from jaxcip._blocks import BlockPattern, LoweredTerm, is_dense, lower_block_programs
+from jaxcip._blocks import (
+    BlockPattern,
+    LoweredTerm,
+    detection_lock,
+    is_dense,
+    lower_block_programs,
+)
 from jaxcip._handler import FunctionHandle
 from jaxcip._options import CompileOptions
 from jaxcip._problem_types import (
@@ -312,7 +318,7 @@ class Block(NamedTuple):
     terms: tuple[CompiledTerm, ...]
     lower: Float[np.ndarray, " rows"]
     upper: Float[np.ndarray, " rows"]
-    affine: "AffineFunction | None"
+    affine: "AffineEvaluator | None"
     """Maps parameter leaves to the constants and the Jacobian entries of the remainder.
 
     It is `None` if the output is the only cut, so that each row is one entry of the cut.
@@ -336,8 +342,37 @@ class AffineValues(NamedTuple):
     """Coefficient of each entry, which may be zero."""
 
 
-AffineFunction = Callable[[Sequence[np.ndarray]], AffineValues]
-"""Maps parameter leaves to `AffineValues`."""
+class AffineEvaluator(NamedTuple):
+    """The affine remainder of a block as a function of the parameters.
+
+    Which entries of its Jacobian can be nonzero does not depend on the parameters, so the
+    pattern is fixed and only the values are computed per solve. A program of cyxla computes
+    them from the flat vector of parameters. A remainder that reads no parameter has its
+    values stored instead.
+    """
+
+    rows: Int[np.ndarray, " nnz"]
+    """Row of each entry."""
+    columns: Int[np.ndarray, " nnz"]
+    """Entry of the cuts, then variable, that each entry is the derivative with respect to."""
+    program: Executable | None
+    """Maps the flat parameters to the constants and the entries, or is `None` if they are fixed.
+
+    The program has one output, the constants, if there are no entries."""
+    constants: Float[np.ndarray, " rows"] | None
+    values: Float[np.ndarray, " nnz"] | None
+
+    def __call__(self, leaves: Sequence[np.ndarray]) -> AffineValues:
+        """Returns the constants and the entries for the given parameter leaves."""
+        if self.program is None:
+            assert self.constants is not None and self.values is not None
+            return AffineValues(self.constants, self.rows, self.columns, self.values)
+        flat = np.concatenate([np.asarray(leaf, np.float64).ravel() for leaf in leaves])
+        outputs = self.program.run([flat])
+        values = outputs[1] if len(outputs) > 1 else np.zeros(0)
+        return AffineValues(
+            outputs[0].astype(np.float64), self.rows, self.columns, values
+        )
 
 
 class LinearRows(NamedTuple):
@@ -506,8 +541,10 @@ class RequestedBlock(NamedTuple):
     """A block whose terms are being built, which `finish_block` completes."""
 
     block: Block
-    """The block without its compiled terms."""
+    """The block without its compiled terms and its affine evaluator."""
     terms: tuple[RequestedTerm, ...]
+    affine: "Future[tuple[AffineEvaluator, _cache.BuildStatistics]] | None" = None
+    """The build of the affine evaluator, if the block has an affine remainder."""
 
 
 def function_block(
@@ -535,16 +572,19 @@ def function_block(
     terms = request_terms(analysis, builder)
     affine = None
     if analysis.affine is not None:
-        affine = sparse_affine_function(analysis, variables, params)
+        affine = builder.lowering.submit(
+            build_affine, analysis, variables, params, options.disk_cache
+        )
     return RequestedBlock(
         Block(
             analysis=analysis,
             terms=(),
             lower=row_bounds(lower, analysis.shape),
             upper=row_bounds(upper, analysis.shape),
-            affine=affine,
+            affine=None,
         ),
         terms,
+        affine,
     )
 
 
@@ -558,7 +598,12 @@ def finish_block(
         handle, built = builder.resolve(term)
         statistics = statistics.add(built)
         terms.append(CompiledTerm(term.term, term.signature, handle))
-    return requested.block._replace(terms=tuple(terms)), statistics
+    block = requested.block._replace(terms=tuple(terms))
+    if requested.affine is not None:
+        affine, built = requested.affine.result()
+        statistics = statistics.add(built)
+        block = block._replace(affine=affine)
+    return block, statistics
 
 
 def row_bounds(bound: Any, shape: tuple[int, ...]) -> Float[np.ndarray, " rows"]:
@@ -587,15 +632,120 @@ def request_terms(
     )
 
 
-def sparse_affine_function(
-    analysis: Analysis, variables: VariableLayout, params: ParamsLayout
-) -> AffineFunction:
-    """Returns a function from parameter leaves to the constants and Jacobian of the remainder.
+def build_affine(
+    analysis: Analysis,
+    variables: VariableLayout,
+    params: ParamsLayout,
+    disk_cache: bool,
+) -> tuple[AffineEvaluator, _cache.BuildStatistics]:
+    """Returns the evaluator of the affine remainder of a block with the cost of building it.
 
     The remainder is exact at any point, so it is linearized at zero, with respect to the
     entries of the cuts and then the variables. ASDEX finds which entries of the Jacobian can
     be nonzero and colors its columns once, so a solve only evaluates one derivative per
-    color. The values of the entries depend on the parameters.
+    color. The values of the entries depend on the parameters, so a program computes them,
+    unless the remainder reads none. The pattern and the program are kept in the disk cache,
+    which lets a warm build skip the detection and the lowering.
+    """
+    remainder = analysis.affine
+    assert remainder is not None
+    start = time.perf_counter()
+    depends = any(ref.origin is Origin.PARAMETER for ref in remainder.inputs)
+    key = _cache.affine_key(
+        str(remainder.jaxpr),
+        repr((remainder.signs, remainder.inputs, remainder.selections)),
+        repr((remainder.linearity, remainder.row_axes, analysis.shape)),
+        repr((analysis.cut_shapes, variables.shapes, variables.offsets)),
+        repr([(aval.shape, str(aval.dtype)) for aval in params.avals]),
+        *(
+            np.asarray(constant, np.float64).tobytes()
+            for constant in analysis.constants
+        ),
+    )
+    if disk_cache:
+        entries = _cache.load_affine(key)
+        lowered = cyxla.load_lowered(key) if depends else ()
+        if entries is not None and lowered is not None:
+            program = None
+            statistics = _cache.BuildStatistics(
+                load_seconds=time.perf_counter() - start
+            )
+            if depends:
+                assert lowered[0] is not None
+                program, compiled = cyxla.compile_program(lowered[0])
+                statistics = statistics.add(seconds_of(compiled))
+            return affine_from(entries, program), statistics
+    value, jacobian, zeros = affine_functions(analysis, variables, params)
+    sample = [jnp.zeros(aval.shape, aval.dtype) for aval in params.avals]
+    entries = jacobian(zeros, sample)
+    pattern = _cache.AffineEntries(
+        np.asarray(entries.indices)[:, 0], np.asarray(entries.indices)[:, 1]
+    )
+    statistics = _cache.BuildStatistics(lower_seconds=time.perf_counter() - start)
+    if not depends:
+        pattern = pattern._replace(
+            constants=np.asarray(value(zeros, sample), np.float64),
+            values=np.asarray(entries.data, np.float64),
+        )
+        if disk_cache:
+            _cache.store_affine(key, pattern)
+        return affine_from(pattern, None), statistics
+
+    offsets = np.cumsum([0, *(math.prod(aval.shape) for aval in params.avals)])
+
+    def program_function(flat: Array) -> tuple[Array, ...]:
+        leaves = [
+            flat[offsets[index] : offsets[index + 1]]
+            .reshape(aval.shape)
+            .astype(aval.dtype)
+            for index, aval in enumerate(params.avals)
+        ]
+        constants = value(zeros, leaves)
+        if pattern.rows.size == 0:
+            return (constants,)
+        return (constants, jacobian(zeros, leaves).data)
+
+    program = cyxla.lower(
+        program_function,
+        [jax.ShapeDtypeStruct((int(offsets[-1]),), jnp.float64)],
+        platform="cpu",
+    )
+    statistics = statistics._replace(lower_seconds=time.perf_counter() - start)
+    if disk_cache:
+        cyxla.store_lowered(key, [program])
+        _cache.store_affine(key, pattern)
+    executable, compiled = cyxla.compile_program(program, disk_cache)
+    statistics = statistics.add(seconds_of(compiled))
+    return affine_from(pattern, executable), statistics
+
+
+def seconds_of(compiled: cyxla.CompileStatistics) -> _cache.BuildStatistics:
+    """Returns the time of compiling or loading an executable, without counting the program.
+
+    The counts of a build are those of the programs of terms, so the affine programs of the
+    blocks add their time but not to the counts.
+    """
+    return _cache.BuildStatistics(
+        compile_seconds=compiled.compile_seconds, load_seconds=compiled.load_seconds
+    )
+
+
+def affine_from(
+    entries: _cache.AffineEntries, program: Executable | None
+) -> AffineEvaluator:
+    """Returns the evaluator of stored entries and, unless they are fixed, a program."""
+    return AffineEvaluator(
+        entries.rows, entries.columns, program, entries.constants, entries.values
+    )
+
+
+def affine_functions(
+    analysis: Analysis, variables: VariableLayout, params: ParamsLayout
+) -> tuple[Callable[..., Array], Callable[..., Any], Array]:
+    """Returns the value of the remainder, its compressed Jacobian and the point of zeros.
+
+    The functions take the point and the parameter leaves. The Jacobian uses the coloring that
+    ASDEX found for the pattern of the remainder, and returns a sparse matrix.
     """
     remainder = analysis.affine
     assert remainder is not None
@@ -618,26 +768,12 @@ def sparse_affine_function(
             remainder, analysis.shape, analysis.constants, parts, leaves, cuts
         ).ravel()
 
-    with warnings.catch_warnings():
+    with detection_lock, warnings.catch_warnings():
         # A dense remainder, such as a matrix product, is correct and costs what the
         # dense derivative would, so the warning about the missing speedup is no use here.
         warnings.simplefilter("ignore", asdex.DenseColoringWarning)
         coloring = asdex.jacobian_coloring(value, zeros, sample, argnums=0)
-    jacobian = jax.jit(asdex.jacobian_from_coloring(value, coloring))
-    constant = jax.jit(lambda leaves: value(zeros, leaves))
-
-    def evaluate(leaves: Sequence[np.ndarray]) -> AffineValues:
-        arguments = [jnp.asarray(leaf) for leaf in leaves]
-        entries = jacobian(zeros, arguments)
-        indices = np.asarray(entries.indices)
-        return AffineValues(
-            constants=np.asarray(constant(arguments), np.float64),
-            rows=indices[:, 0],
-            columns=indices[:, 1],
-            values=np.asarray(entries.data, np.float64),
-        )
-
-    return evaluate
+    return value, asdex.jacobian_from_coloring(value, coloring), zeros
 
 
 def input_parts(

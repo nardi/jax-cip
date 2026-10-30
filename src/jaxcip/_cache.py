@@ -17,6 +17,7 @@ import cyxla
 import jax
 import numpy as np
 from cyxla import Executable
+from jaxtyping import Float, Int
 
 from jaxcip._blocks import BlockPattern, LoweredTerm
 from jaxcip._programs import (
@@ -31,6 +32,9 @@ LOWERED_MAGIC = b"JAXCIP-LOWERED-3\n"
 
 LOWERED_SUFFIX = ".jaxcip-lowered"
 """Suffix of the files of lowered programs, which differs from the one cyxla uses."""
+
+AFFINE_SUFFIX = ".jaxcip-affine.npz"
+"""Suffix of the files with the entries of the affine remainder of a block."""
 
 KEY_DISTRIBUTIONS = ("jaxcip", "jaxormick")
 """Distributions besides JAX and cyxla whose code determines the lowered programs."""
@@ -188,3 +192,47 @@ def compile_program(
 def enable_x64() -> None:
     """Switches JAX to 64-bit floats, which the expression handler uses throughout."""
     jax.config.update("jax_enable_x64", True)
+
+
+class AffineEntries(NamedTuple):
+    """Which entries of the Jacobian of an affine remainder exist, and its values if fixed."""
+
+    rows: Int[np.ndarray, " nnz"]
+    columns: Int[np.ndarray, " nnz"]
+    constants: Float[np.ndarray, " rows"] | None = None
+    """The constants of a remainder that does not depend on the parameters, else `None`."""
+    values: Float[np.ndarray, " nnz"] | None = None
+    """The Jacobian entries of such a remainder, else `None`."""
+
+
+def affine_key(*parts: str | bytes) -> str:
+    """Returns the key of an affine remainder, equal for remainders that compile alike."""
+    return cyxla.cache_key(*parts, distributions=KEY_DISTRIBUTIONS)
+
+
+def store_affine(key: str, entries: AffineEntries) -> None:
+    """Stores the entries of an affine remainder under a key."""
+    path = cyxla.cache_directory() / f"{key}{AFFINE_SUFFIX}"
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    fields = {
+        name: value for name, value in entries._asdict().items() if value is not None
+    }
+    with temporary.open("wb") as file:
+        np.savez(file, **fields)
+    temporary.replace(path)
+
+
+def load_affine(key: str) -> AffineEntries | None:
+    """Returns the entries stored under a key, or `None` if there are none.
+
+    A file that cannot be read is removed.
+    """
+    path = cyxla.cache_directory() / f"{key}{AFFINE_SUFFIX}"
+    if not path.exists():
+        return None
+    try:
+        with np.load(path) as archive:
+            return AffineEntries(**{name: archive[name] for name in archive.files})
+    except (OSError, ValueError, KeyError, TypeError):
+        path.unlink(missing_ok=True)
+        return None
