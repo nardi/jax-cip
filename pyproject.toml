@@ -15,7 +15,13 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["meson-python>=0.18", "meson>=1.8", "cython>=3.1", "cyxla>=0.1.1,<0.2"]
+requires = [
+    "meson-python>=0.18",
+    "meson>=1.8",
+    "cython>=3.1",
+    "cyxla>=0.1.1,<0.2",
+    "patchelf; sys_platform == 'linux'",
+]
 build-backend = "mesonpy"
 
 [dependency-groups]
@@ -88,3 +94,21 @@ select = ["E4", "E7", "E9", "F", "I"]
 [tool.ty.src]
 # The Cython modules are checked through their `.pyi` stubs.
 exclude = ["src/jaxcip/_block.py", "src/jaxcip/_handler.py", "src/jaxcip/_problem.py"]
+
+[tool.cibuildwheel]
+# Only Linux on x86-64 is tested, so there are no wheels for other systems. The wheels
+# target glibc, because the PJRT CPU plugin has no musl build.
+build = "cp312-* cp313-*"
+skip = "*-musllinux_*"
+archs = ["x86_64"]
+# The released asdex lacks a fix that JAX-CIP needs, and JAXormick has no release on PyPI,
+# so the test environment takes both at the revisions of `tool.uv.sources`.
+before-test = '''
+pip install \
+    "asdex @ git+https://github.com/adrhill/asdex@da130b048b72c03e5ac1cb154968797bc32868b8" \
+    "jaxormick @ git+https://github.com/nardi/jaxormick@06d12d85fcc6cc145b3db9b21ff854546e77bf93"
+'''
+test-command = "python {project}/scripts/smoke_test.py"
+# Meson-python bundles the libraries under file names that differ from their sonames, as
+# `scripts/repair_wheel.py` explains.
+repair-wheel-command = "pip install wheel && python /project/scripts/repair_wheel.py {wheel} {dest_dir}"
