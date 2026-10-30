@@ -358,26 +358,26 @@ wheels = [
 
 [[package]]
 name = "cyxla"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jax" },
     { name = "numpy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/64/6c/0bb40723e218fbe58824ca6ba39334c4522bab90f1b4390357a2f61622e6/cyxla-0.1.0.tar.gz", hash = "sha256:c7b8407d8cd00bf3091003c3ad35f88b056b67b16acb972473a9c1ef6a4fdf85", size = 215041, upload-time = "2026-10-29T10:48:41.806Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/eb/24/3250e1502c6126f7e5849507ae606ae2b8a63b2adfb1d4b4bbe29a1c11ad/cyxla-0.1.1.tar.gz", hash = "sha256:f93bbc22c08a81a385c92c9467340fdc758e114a3dfc11f522b81db3d99e2d52", size = 228626, upload-time = "2026-10-30T22:09:26.702Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/60/e700c810823e6b87e734c63ccb2c9f7e7c9aff6fea62e9d3810fda016108/cyxla-0.1.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:91b601903e9f41f004cfe4134a4af18e36671cfc039de720ca029fdfba925966", size = 146359, upload-time = "2026-10-29T10:48:24.354Z" },
-    { url = "https://files.pythonhosted.org/packages/e7/61/7340e8a521124a0199375baeaa8179e2d3588ddaab4a9739134efe32dd16/cyxla-0.1.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:0e0db810bc42f8826c96150147e1549b6af38458d49b663d1962042155b1e263", size = 157370, upload-time = "2026-10-29T10:48:25.721Z" },
-    { url = "https://files.pythonhosted.org/packages/d5/89/51bbf762b8acb9cdaed367e6ce96de95445051dd2df5ed31d8ce30516ed8/cyxla-0.1.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3e886d46a23bf7b9153e64191839b88901a18ad36ff7d1a2ea9de58cf9fc9ba2", size = 162998, upload-time = "2026-10-29T10:48:27.051Z" },
-    { url = "https://files.pythonhosted.org/packages/7e/0d/ac58693e86ea75ab17aaf22f240ba9c1f6eecbce7d0dfe5bdd7e55d3145c/cyxla-0.1.0-cp312-cp312-win_amd64.whl", hash = "sha256:a7a57d8af9aaa7ff6ca99b41a25d8577946feff37c15d22316679600a4c8694f", size = 138505, upload-time = "2026-10-29T10:48:28.316Z" },
-    { url = "https://files.pythonhosted.org/packages/7e/e8/29689d78aa12d1c8a85c97fadaa0c415a3eeefa1adb362ca156f6e67fa1e/cyxla-0.1.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:2a16d34df3fe71f546d03c36bce892241fb4d9983a1036d57b70a72592d55393", size = 146108, upload-time = "2026-10-29T10:48:29.868Z" },
-    { url = "https://files.pythonhosted.org/packages/e9/f0/f2a127cc5032eb4d1b825a4597e6daf3f903f65e4e06c61823436999fd9f/cyxla-0.1.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:dd1e16c0d82e5ffae1698ea32b78cab28c726e0bc042cb6a2a5de9fddd6fbbf3", size = 156497, upload-time = "2026-10-29T10:48:31.235Z" },
-    { url = "https://files.pythonhosted.org/packages/53/3d/d4c6beed6e754ad153cfc8286b0ec3c3f98e1a84e9f028b3476584b1571c/cyxla-0.1.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d7aec3f6782bbe4fd12fe8d674252ac5151493d8fe2b24ea2ff26c853800de5b", size = 162480, upload-time = "2026-10-29T10:48:32.766Z" },
-    { url = "https://files.pythonhosted.org/packages/5b/26/acd3b61326d4755521d8c73fad7ae86dbbf56c60332db3520e00554a56e7/cyxla-0.1.0-cp313-cp313-win_amd64.whl", hash = "sha256:a9347089944443303a9748f9273cd8f54db2a90a2082dc60889d3b0f8fb9d6c8", size = 138465, upload-time = "2026-10-29T10:48:34.183Z" },
-    { url = "https://files.pythonhosted.org/packages/95/a7/90f5813ab8fa2f72dc914d86a21959b2904f0a1771119b719b8a7ce16646/cyxla-0.1.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:06a3b2978fa96df024030286ae9905f0e976305173524ee116f96d6d69728c57", size = 146536, upload-time = "2026-10-29T10:48:35.538Z" },
-    { url = "https://files.pythonhosted.org/packages/73/6c/24f72a29e1ed3ef17965476e0bc74eb1a0dff041dd78a103c1815bce8855/cyxla-0.1.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:263ebefe18e0718a5c6e68bda147e553b79f22772def7ee3cf6f124117e84a1c", size = 157668, upload-time = "2026-10-29T10:48:37.417Z" },
-    { url = "https://files.pythonhosted.org/packages/9b/20/5a36f481a014bd9ff24dcc943f7d6a480b7201c2001811413cbe2c79bef6/cyxla-0.1.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:dfa2a7c562618e023c836941d3bdf8c3b86d5bff3b7e184e3249bbb85d7bca3e", size = 162579, upload-time = "2026-10-29T10:48:39.093Z" },
-    { url = "https://files.pythonhosted.org/packages/eb/9a/ef2ea147510a9f7877aed87970ae4cd1285fb6441b7a85242787f0260cb1/cyxla-0.1.0-cp314-cp314-win_amd64.whl", hash = "sha256:e3120b50f5cae0ce8278467c4816e09dbb4509a42f140026b2b77550ea98fe01", size = 140427, upload-time = "2026-10-29T10:48:40.423Z" },
+    { url = "https://files.pythonhosted.org/packages/56/f7/4d4f753bcd785b65dc43120b2541892e45bc44a79477eb9182e620976aec/cyxla-0.1.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:906b50c582a90bcc0c866014bea708393800b0e72c353e86242e2aa8479e465c", size = 198116, upload-time = "2026-10-30T22:09:10.76Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/d1/bb5106d8f47854a1a6a11940d727a0ec554c848cc2236c68644edbd86c84/cyxla-0.1.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e2476c6d0defb8ed6855a3b27fbdab6ebdbba4f59217bd7768d9b959791b6d91", size = 226020, upload-time = "2026-10-30T22:09:12.09Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/7e/306ba8d3454068d18c3b2364fc71fd4e475e67473f236bb46ead53a378d1/cyxla-0.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:54f45408b19cb89567f69c20f9a121a7600f95e813c55e7fad7574c9dd9c3e0f", size = 234544, upload-time = "2026-10-30T22:09:13.669Z" },
+    { url = "https://files.pythonhosted.org/packages/22/c5/f77dad64ac89f15fad5493a4df8053ef1e4e9d826e4f49a15bd0e12b6978/cyxla-0.1.1-cp312-cp312-win_amd64.whl", hash = "sha256:553875bd3d4ba25ab30cee0fb039b3fc452878bf634450ebe813b87f062126b1", size = 190963, upload-time = "2026-10-30T22:09:15.059Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/15/53ac076ad054185bfc45d31e2e25c135ad4eca5c8eaafa6b42fa97359793/cyxla-0.1.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:eb119ca1e2e0f4624e936e472258820bc4bfcc5afd5c6a10d9417e718486d946", size = 197926, upload-time = "2026-10-30T22:09:16.333Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/e3/df1ef98a07b6d7b90d08591a73b755a0fbc095ed8080c6d5b2dfe357e850/cyxla-0.1.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:8cb6b3903b134479b61bfb466c7601fe1727d65e151452652a1c35a055266404", size = 224865, upload-time = "2026-10-30T22:09:17.967Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/5f/829aa665f403223d9bf4946c7f92ba2a38fe116eda0774b5c3c8bc2caea0/cyxla-0.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d11b175de86131bcef8a378b64688a56eb548336035f5642d04d12b9300f2431", size = 233002, upload-time = "2026-10-30T22:09:19.181Z" },
+    { url = "https://files.pythonhosted.org/packages/66/73/989ee97bdefad7d96bb1f0b1ad283a16e392e35e59e0c8065f338e3f87ce/cyxla-0.1.1-cp313-cp313-win_amd64.whl", hash = "sha256:4143d23f254d29e1e0e8fc61cdabb79af13599840a195d68cb95cfee32c83fac", size = 190969, upload-time = "2026-10-30T22:09:20.584Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/9c/d0caf8c7514657071a7cd9b303139f157cd2d625d165e17ba59127aac935/cyxla-0.1.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:ef7a07b1421043cb3097ef7a33ea1d766a2c797eabb4d5f5984ebfb7988542c8", size = 198498, upload-time = "2026-10-30T22:09:21.722Z" },
+    { url = "https://files.pythonhosted.org/packages/34/d4/40fc4bf7d4179d23726d0c495d38d4485eaa66a7b6632ebebf4926c03fc1/cyxla-0.1.1-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:278e40eb17a3d7ad8d8af2ee6e6444e89e8cb34f60734cbbdc95cd783405a500", size = 226734, upload-time = "2026-10-30T22:09:23.044Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/f9/8024cc5eb8de8c2a9eb496dda489d2d3e279891145f85e4a65efac16a5b7/cyxla-0.1.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c3bdf003d1dbec71d078bf8a33098f734449cf487c93d8ee11e1061aef0d5406", size = 233217, upload-time = "2026-10-30T22:09:24.27Z" },
+    { url = "https://files.pythonhosted.org/packages/df/0f/32172ab3f0aff5db250aa21d7b41065a74e6e1c5688c48209d04897f45c5/cyxla-0.1.1-cp314-cp314-win_amd64.whl", hash = "sha256:4f7f3bb75dd760e5f882c135179fe99442a33f6aee2903f9fdf02ac52e993f9b", size = 193399, upload-time = "2026-10-30T22:09:25.479Z" },
 ]
 
 [package.optional-dependencies]
@@ -590,7 +590,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "asdex", git = "https://github.com/adrhill/asdex?rev=da130b048b72c03e5ac1cb154968797bc32868b8" },
-    { name = "cyxla", extras = ["cpu"], specifier = ">=0.1,<0.2" },
+    { name = "cyxla", extras = ["cpu"], specifier = ">=0.1.1,<0.2" },
     { name = "jax", specifier = ">=0.11,<0.12" },
     { name = "jaxormick", git = "https://github.com/nardi/jaxormick?rev=06d12d85fcc6cc145b3db9b21ff854546e77bf93" },
     { name = "jaxtyping", specifier = ">=0.2" },
