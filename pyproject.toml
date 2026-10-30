@@ -97,10 +97,12 @@ exclude = ["src/jaxcip/_block.py", "src/jaxcip/_handler.py", "src/jaxcip/_proble
 
 [tool.cibuildwheel]
 # Only Linux on x86-64 is tested, so there are no wheels for other systems. The wheels
-# target glibc, because the PJRT CPU plugin has no musl build.
+# target glibc, because the PJRT CPU plugin has no musl build. The SCIP libraries need
+# glibc 2.34 and the C++ runtime of GCC 11, which `manylinux_2_28` does not allow.
 build = "cp312-* cp313-*"
 skip = "*-musllinux_*"
 archs = ["x86_64"]
+manylinux-x86_64-image = "manylinux_2_34"
 # The released asdex lacks a fix that JAX-CIP needs, and JAXormick has no release on PyPI,
 # so the test environment takes both at the revisions of `tool.uv.sources`.
 before-test = '''
