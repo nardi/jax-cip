@@ -13,3 +13,11 @@
 ::: jaxcip.clear_caches
 
 ::: jaxcip.scip_version
+
+::: jaxcip.save
+
+::: jaxcip.load
+
+::: jaxcip.dumps
+
+::: jaxcip.loads

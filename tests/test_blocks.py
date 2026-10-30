@@ -6,6 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+import asdex
 import jax
 import jax.numpy as jnp
 import jaxormick as jmk
@@ -971,7 +972,7 @@ def test_a_function_that_asdex_cannot_analyse_reads_every_variable(
     def refuse(*arguments: Any, **keywords: Any) -> None:
         raise NotImplementedError("No handler for the primitive.")
 
-    monkeypatch.setattr(_blocks.asdex, "jacobian_sparsity", refuse)
+    monkeypatch.setattr(asdex, "jacobian_sparsity", refuse)
     term, _ = block_of("neighbours")
     pattern = detect_pattern(block_function(term.term, term.signature), term.signature)
     assert pattern.nnz == 5 * WIDTH

@@ -7,7 +7,7 @@ authors = [{ name = "Nardi Lam", email = "mail@nardilam.nl" }]
 requires-python = ">=3.12"
 dependencies = [
     "asdex",
-    "cyxla[cpu]>=0.1,<0.2",
+    "cyxla[cpu]>=0.1.1,<0.2",
     "jax>=0.11,<0.12",
     "jaxormick>=0.0.1",
     "jaxtyping>=0.2",
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["meson-python>=0.18", "meson>=1.8", "cython>=3.1", "cyxla>=0.1,<0.2"]
+requires = ["meson-python>=0.18", "meson>=1.8", "cython>=3.1", "cyxla>=0.1.1,<0.2"]
 build-backend = "mesonpy"
 
 [dependency-groups]

@@ -21,6 +21,7 @@ from jaxcip._problem_types import (
 )
 from jaxcip._rows import rows
 from jaxcip._scip_parameters import ScipParameter
+from jaxcip._serialize import dumps, load, loads, save
 from jaxcip._solve import FileSolution, Solution, solve, solve_file
 from jaxcip._types import (
     CallbackStatistics,
@@ -70,7 +71,11 @@ __all__ = [
     "Verbosity",
     "clear_caches",
     "compile",
+    "dumps",
+    "load",
+    "loads",
     "rows",
+    "save",
     "scip_version",
     "solve",
     "solve_file",

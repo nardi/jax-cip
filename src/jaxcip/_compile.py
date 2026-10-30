@@ -13,9 +13,8 @@ from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from types import TracebackType
-from typing import Any, NamedTuple, Self
+from typing import Any, NamedTuple, Never, Self
 
-import asdex
 import cyxla
 import jax
 import jax.numpy as jnp
@@ -47,7 +46,7 @@ from jaxcip._programs import (
     lower_programs,
     term_signature,
 )
-from jaxcip._types import Domain, Programs
+from jaxcip._types import Domain, Programs, Sense
 
 COMPILED_TERMS_LIMIT = 64
 """Number of terms whose handles the process keeps after their problems are gone.
@@ -61,6 +60,14 @@ compiled_terms: OrderedDict[str, FunctionHandle | BlockHandle] = OrderedDict()
 """Handles of the terms compiled in this process, by `_cache.term_key`, oldest first."""
 
 
+def remember_handle(key: str, handle: FunctionHandle | BlockHandle) -> None:
+    """Keeps a handle for later builds of terms with the same key, within the limit."""
+    compiled_terms[key] = handle
+    # Problems that still use an evicted handle keep it alive themselves.
+    while len(compiled_terms) > COMPILED_TERMS_LIMIT:
+        compiled_terms.popitem(last=False)
+
+
 class VariableLayout(NamedTuple):
     """The variables of a problem as one flat vector."""
 
@@ -72,6 +79,8 @@ class VariableLayout(NamedTuple):
     upper: Float[np.ndarray, " n"]
     domains: tuple[Domain, ...]
     """Domain of each leaf."""
+    fingerprint: tuple[cyxla.LeafInfo, ...]
+    """The path and shape of every leaf, which a tree given to `load` has to match."""
 
     @property
     def size(self) -> int:
@@ -102,6 +111,8 @@ class ParamsLayout(NamedTuple):
 
     structure: jax.tree_util.PyTreeDef
     avals: tuple[jax.ShapeDtypeStruct, ...]
+    fingerprint: tuple[cyxla.LeafInfo, ...]
+    """The path and shape of every leaf, which a tree given to `load` has to match."""
 
     def leaves(self, params: PyTree[Any]) -> list[np.ndarray]:
         """Returns the leaves of parameters, checking them against the layout."""
@@ -125,6 +136,8 @@ class CompiledTerm(NamedTuple):
     term: Term
     signature: TermSignature
     handle: FunctionHandle | BlockHandle
+    key: str = ""
+    """The key of the term's programs, under which the handle is shared and stored."""
 
     @property
     def entries(self) -> int:
@@ -256,10 +269,7 @@ class HandleBuilder:
                 programs,
             )
         self.handles[requested.key] = created
-        compiled_terms[requested.key] = created
-        # Problems that still use an evicted handle keep it alive themselves.
-        while len(compiled_terms) > COMPILED_TERMS_LIMIT:
-            compiled_terms.popitem(last=False)
+        remember_handle(requested.key, created)
         return created, built.statistics
 
     def build_programs(
@@ -408,13 +418,27 @@ class LinearRows(NamedTuple):
 class CompiledProblem(NamedTuple):
     """A problem whose functions are analysed and compiled, ready to solve."""
 
-    problem: Problem
+    problem: Problem | None
+    """The problem that was compiled, or `None` for one that `load` returned."""
     options: CompileOptions
+    sense: Sense
     variables: VariableLayout
     params: ParamsLayout
     objective: Block | None
     constraints: tuple[Block, ...]
     statistics: _cache.BuildStatistics
+
+    def __reduce__(self) -> Never:
+        """Refuses to pickle, since a compiled problem holds native handles.
+
+        `jaxcip.dumps` and `jaxcip.loads` move a compiled problem between processes. The
+        trees of the variables and parameters are not part of the file, so unpickling could
+        not return a problem that is ready to use.
+        """
+        raise TypeError(
+            "A compiled problem cannot be pickled. Use jaxcip.dumps to get bytes, and "
+            "jaxcip.loads with the variables and parameters to read them."
+        )
 
 
 def compile(  # noqa: A001
@@ -432,7 +456,11 @@ def compile(  # noqa: A001
     start = time.perf_counter()
     variables = variable_layout(problem.variables)
     leaves, structure = jax.tree.flatten(params)
-    params_layout = ParamsLayout(structure, tuple(as_aval(leaf) for leaf in leaves))
+    params_layout = ParamsLayout(
+        structure,
+        tuple(as_aval(leaf) for leaf in leaves),
+        cyxla.tree_fingerprint(params, lambda leaf: as_aval(leaf).shape),
+    )
     # All blocks are analysed and their programs requested before any term is waited for,
     # so the builder lowers and compiles terms of different blocks at the same time.
     with HandleBuilder(options) as builder:
@@ -484,6 +512,7 @@ def compile(  # noqa: A001
     return CompiledProblem(
         problem=problem,
         options=options,
+        sense=problem.sense,
         variables=variables,
         params=params_layout,
         objective=objective,
@@ -500,6 +529,15 @@ def as_aval(leaf: Any) -> jax.ShapeDtypeStruct:
     return jax.ShapeDtypeStruct(array.shape, array.dtype)
 
 
+def leaf_shape(leaf: Any) -> tuple[int, ...]:
+    """Returns the shape of a leaf of the variables, which is a `Variable` or an array."""
+    if is_variable(leaf):
+        return np.broadcast_shapes(
+            leaf.shape, np.shape(leaf.lower), np.shape(leaf.upper)
+        )
+    return tuple(np.shape(leaf))
+
+
 def variable_layout(variables: PyTree[Any]) -> VariableLayout:
     """Returns the flat layout of a pytree of `Variable`s."""
     leaves, structure = jax.tree.flatten(variables, is_leaf=is_variable)
@@ -513,9 +551,7 @@ def variable_layout(variables: PyTree[Any]) -> VariableLayout:
             raise TypeError(
                 f"Every leaf of the variables must be a Variable, not {leaf!r}."
             )
-        shape = np.broadcast_shapes(
-            leaf.shape, np.shape(leaf.lower), np.shape(leaf.upper)
-        )
+        shape = leaf_shape(leaf)
         lower = np.broadcast_to(np.asarray(leaf.lower, np.float64), shape).ravel()
         upper = np.broadcast_to(np.asarray(leaf.upper, np.float64), shape).ravel()
         if leaf.domain is Domain.BINARY:
@@ -534,6 +570,7 @@ def variable_layout(variables: PyTree[Any]) -> VariableLayout:
         lower=np.concatenate(lowers) if lowers else np.zeros(0),
         upper=np.concatenate(uppers) if uppers else np.zeros(0),
         domains=tuple(leaf.domain for leaf in leaves),
+        fingerprint=cyxla.tree_fingerprint(variables, leaf_shape, is_leaf=is_variable),
     )
 
 
@@ -597,7 +634,7 @@ def finish_block(
     for term in requested.terms:
         handle, built = builder.resolve(term)
         statistics = statistics.add(built)
-        terms.append(CompiledTerm(term.term, term.signature, handle))
+        terms.append(CompiledTerm(term.term, term.signature, handle, term.key))
     block = requested.block._replace(terms=tuple(terms))
     if requested.affine is not None:
         affine, built = requested.affine.result()
@@ -767,6 +804,8 @@ def affine_functions(
         return evaluate_term(
             remainder, analysis.shape, analysis.constants, parts, leaves, cuts
         ).ravel()
+
+    import asdex
 
     with detection_lock, warnings.catch_warnings():
         # A dense remainder, such as a matrix product, is correct and costs what the

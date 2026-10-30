@@ -70,6 +70,7 @@ nav:
       - Basic usage: guide/basic.md
       - Parameters and batches: guide/parameters.md
       - Options and statistics: guide/options.md
+      - Saving and loading: guide/saving.md
       - Performance: guide/performance.md
       - Comparison with native SCIP: guide/comparison.md
   - API reference:

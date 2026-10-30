@@ -8,6 +8,7 @@ python.install_sources(
   '_problem_types.py',
   '_programs.py',
   '_roots.py',
+  '_serialize.py',
   '_rows.py',
   '_scip_parameters.py',
   '_solve.py',

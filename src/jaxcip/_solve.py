@@ -147,7 +147,7 @@ def build_scip(compiled: CompiledProblem, params: PyTree[Any]) -> Scip:
     variables = compiled.variables
     handler = compiled.options.handler
     scip = Scip("jaxcip")
-    scip.set_sense(compiled.problem.sense)
+    scip.set_sense(compiled.sense)
     objective = np.zeros(variables.size)
     offset = 0.0
     objective_block = compiled.objective
@@ -163,13 +163,13 @@ def build_scip(compiled: CompiledProblem, params: PyTree[Any]) -> Scip:
     scip.add_objective_offset(offset)
     if objective_block is not None and objective_block.terms:
         epigraph = scip.add_variable(-math.inf, math.inf, 1.0, Domain.CONTINUOUS)
-        match compiled.problem.sense:
+        match compiled.sense:
             case Sense.MINIMIZE:
                 bounds = (-math.inf, 0.0)
             case Sense.MAXIMIZE:
                 bounds = (0.0, math.inf)
             case _:
-                raise AssertionError(f"Unknown sense {compiled.problem.sense}.")
+                raise AssertionError(f"Unknown sense {compiled.sense}.")
         terms = row_terms(objective_block, variables, param_leaves, handler, linear)[0]
         scip.add_jax_constraint(
             terms,

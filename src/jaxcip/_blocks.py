@@ -14,9 +14,8 @@ import threading
 import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Sequence
-from typing import Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-import asdex
 import jax
 import jax.numpy as jnp
 import jaxormick as jmk
@@ -62,6 +61,10 @@ patterns: OrderedDict[tuple[str, tuple[float, ...], TermSignature], "BlockPatter
     OrderedDict()
 )
 """Patterns of the cuts that were analysed, by jaxpr, signs and signature, oldest first."""
+
+if TYPE_CHECKING:
+    # asdex imports numba, which a loaded problem does not need.
+    import asdex
 
 
 class BlockPattern(NamedTuple):
@@ -144,6 +147,8 @@ def detect_pattern(function: BlockFunction, signature: TermSignature) -> BlockPa
     child. The derivative of such an entry is zero. If ASDEX cannot analyse the function,
     every entry depends on every variable.
     """
+    import asdex
+
     rows, inputs = signature.num_entries, signature.num_inputs
     try:
         with detection_lock:
@@ -171,8 +176,10 @@ def coloring_of(
     num_inputs: int,
     avals: Sequence[jax.ShapeDtypeStruct],
     mode: Literal["fwd", "rev"] | None,
-) -> asdex.ColoredPattern:
+) -> "asdex.ColoredPattern":
     """Returns the coloring of the pattern for a function with the given arguments."""
+    import asdex
+
     sparsity = asdex.SparsityPattern.from_coo(
         pattern.rows.astype(np.int32),
         pattern.columns.astype(np.int32),
@@ -199,6 +206,8 @@ def compressed(
     The Jacobian is with respect to the first argument, and its entries come in the order of
     the pattern.
     """
+    import asdex
+
     coloring = coloring_of(pattern, num_inputs, avals, mode)
     both = asdex.value_and_compressed_jacobian_from_coloring(function, coloring)
 
