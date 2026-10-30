@@ -141,11 +141,13 @@ LARGE_PROGRAM = textwrap.dedent(
 """A program that builds 10⁴ rows over 10⁴ variables and prints its peak memory in KiB."""
 
 
+@pytest.mark.integration
 def test_no_dense_jacobian_for_many_rows() -> None:
     """Checks that 10⁴ rows over 10⁴ variables never allocate a dense Jacobian.
 
-    A dense Jacobian of that size takes 800 MB. The process peaks at about 440 MiB with the
-    Jacobian stored sparsely, most of it from JAX and SCIP, so a dense one would show.
+    A dense Jacobian of that size takes 760 MiB. The process peaks at 480 to 850 MiB with
+    the Jacobian stored sparsely, depending on the machine, most of it from JAX and SCIP, so
+    a dense one would exceed the limit on any of them.
     """
     result = subprocess.run(
         [sys.executable, "-c", LARGE_PROGRAM],
@@ -155,4 +157,4 @@ def test_no_dense_jacobian_for_many_rows() -> None:
         timeout=600,
     )
     peak_kib = int(result.stdout.strip().splitlines()[-1])
-    assert peak_kib < 700 * 1024
+    assert peak_kib < 1100 * 1024
