@@ -12,6 +12,8 @@ from typing import Any, NamedTuple
 import jax
 import jax.numpy as jnp
 import jaxormick as jmk
+import numpy as np
+from cyxla import ArrayType
 from jax.extend.core import Jaxpr
 from jaxtyping import Array, Float
 
@@ -48,6 +50,8 @@ class LoweredProgram(NamedTuple):
     """Portable StableHLO bytecode, which the PJRT plugin compiles."""
     text: str
     """The module as text, from which the executable cache key is computed."""
+    input_types: tuple[ArrayType, ...] = ()
+    """The type of each argument, which an executable needs to be stored in a file."""
 
 
 class LoweredPrograms(NamedTuple):
@@ -309,7 +313,11 @@ def lower(
         jax.jit(function, keep_unused=True), platforms=["cpu"]
     )(*shapes)
     return LoweredProgram(
-        code=bytes(exported.mlir_module_serialized), text=exported.mlir_module()
+        code=bytes(exported.mlir_module_serialized),
+        text=exported.mlir_module(),
+        input_types=tuple(
+            ArrayType(np.dtype(shape.dtype), tuple(shape.shape)) for shape in shapes
+        ),
     )
 
 

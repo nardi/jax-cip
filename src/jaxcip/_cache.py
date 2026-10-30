@@ -7,6 +7,7 @@ warm build traces the function but neither lowers nor compiles. Cyxla stores the
 executables.
 """
 
+import json
 import os
 import struct
 import threading
@@ -16,7 +17,7 @@ from typing import NamedTuple
 import cyxla
 import jax
 import numpy as np
-from cyxla import Executable
+from cyxla import ArrayType, Executable
 from jaxtyping import Float, Int
 
 from jaxcip._blocks import BlockPattern, LoweredTerm
@@ -27,7 +28,7 @@ from jaxcip._programs import (
     TermSignature,
 )
 
-LOWERED_MAGIC = b"JAXCIP-LOWERED-3\n"
+LOWERED_MAGIC = b"JAXCIP-LOWERED-4\n"
 """First bytes of a file of lowered programs."""
 
 LOWERED_SUFFIX = ".jaxcip-lowered"
@@ -101,8 +102,11 @@ def encode_lowered(term: LoweredTerm) -> bytes:
             parts.append(struct.pack("<B", 0))
             continue
         text = program.text.encode()
-        parts.append(struct.pack("<BQQ", 1, len(program.code), len(text)))
-        parts += [program.code, text]
+        types = json.dumps(
+            [[item.dtype.name, list(item.shape)] for item in program.input_types]
+        ).encode()
+        parts.append(struct.pack("<BQQQ", 1, len(program.code), len(text), len(types)))
+        parts += [program.code, text, types]
     pattern = term.pattern
     if pattern is None:
         parts.append(struct.pack("<B", 0))
@@ -128,12 +132,17 @@ def decode_lowered(data: bytes) -> LoweredTerm:
             if not is_present:
                 programs.append(None)
                 continue
-            code_size, text_size = struct.unpack_from("<QQ", data, offset)
-            offset += 16
+            code_size, text_size, types_size = struct.unpack_from("<QQQ", data, offset)
+            offset += 24
             code = data[offset : offset + code_size]
-            text = data[offset + code_size : offset + code_size + text_size].decode()
-            offset += code_size + text_size
-            programs.append(LoweredProgram(code, text))
+            text_end = offset + code_size + text_size
+            text = data[offset + code_size : text_end].decode()
+            types = tuple(
+                ArrayType(np.dtype(name), tuple(shape))
+                for name, shape in json.loads(data[text_end : text_end + types_size])
+            )
+            offset = text_end + types_size
+            programs.append(LoweredProgram(code, text, types))
         (has_pattern,) = struct.unpack_from("<B", data, offset)
         offset += 1
         if has_pattern:
@@ -145,7 +154,7 @@ def decode_lowered(data: bytes) -> LoweredTerm:
             columns = np.frombuffer(data, np.intc, nnz, offset)
             offset += nnz * size
             pattern = BlockPattern(pointers.copy(), columns.copy())
-    except (struct.error, UnicodeDecodeError, ValueError) as error:
+    except (struct.error, UnicodeDecodeError, ValueError, TypeError) as error:
         raise ValueError(f"Malformed file of lowered programs: {error}") from error
     if offset != len(data):
         raise ValueError("Malformed file of lowered programs: trailing bytes")
@@ -179,7 +188,10 @@ def compile_program(
 ) -> tuple[Executable, BuildStatistics]:
     """Compiles a program for the CPU, or loads its executable from the disk cache."""
     executable, compiled = cyxla.compile_program(
-        cyxla.LoweredProgram(program.code, program.text, platform="cpu"), disk_cache
+        cyxla.LoweredProgram(
+            program.code, program.text, program.input_types, platform="cpu"
+        ),
+        disk_cache,
     )
     return executable, BuildStatistics(
         compile_seconds=compiled.compile_seconds,
