@@ -1,0 +1,74 @@
+[project]
+site_name = "JAX-CIP"
+site_description = "JAX functions as nonlinear expressions in the SCIP optimization solver"
+repo_url = "https://github.com/nardi/jax-cip"
+repo_name = "nardi/jax-cip"
+extra_javascript = [
+  "javascripts/mathjax.js",
+  "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js",
+]
+
+nav = [
+  { "Home" = "index.md" },
+  { "Installation" = "installation.md" },
+  { "Theory" = [
+    { "Nonlinear solving in SCIP" = "theory/scip.md" },
+    { "JAX functions in SCIP" = "theory/jax.md" },
+    { "References" = "theory/references.md" },
+  ] },
+  { "User guide" = [
+    { "Basic usage" = "guide/basic.md" },
+    { "Parameters and batches" = "guide/parameters.md" },
+    { "Options and statistics" = "guide/options.md" },
+    { "Saving and loading" = "guide/saving.md" },
+    { "Performance" = "guide/performance.md" },
+    { "Comparison with native SCIP" = "guide/comparison.md" },
+  ] },
+  { "API reference" = [
+    { "Problems" = "api/problems.md" },
+    { "Compiling and solving" = "api/solving.md" },
+    { "Options" = "api/options.md" },
+    { "Results and statistics" = "api/results.md" },
+  ] },
+]
+
+[project.theme]
+features = [
+  "content.code.copy",
+  "navigation.sections",
+  "navigation.top",
+  "search.suggest",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions.pymdownx.arithmatex]
+generic = true
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+show_source = false
+show_root_heading = true
+show_root_full_path = false
+heading_level = 2
+members_order = "source"
+merge_init_into_class = true
+separate_signature = true
+show_signature_annotations = true

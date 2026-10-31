@@ -30,8 +30,6 @@ dev = [
     "hypothesis>=6",
     "lxml>=5",
     "markdown-pytest>=0.6.6",
-    "mkdocs-material>=9.7.6",
-    "mkdocstrings[python]>=0.27",
     "pytest>=9.1.0",
     "pytest-benchmark>=5",
     "pytest-cov>=7",
@@ -40,6 +38,8 @@ dev = [
     "ty>=0.0.59",
     "types-lxml>=2026.2.16",
 ]
+# The documentation site. The API reference reads the source, so it needs no build.
+docs = ["zensical>=0.0.73", "mkdocstrings-python>=2"]
 # An editable meson-python install rebuilds the extension modules on import, so the
 # build tools have to live in the environment itself rather than in an isolated one.
 build = ["meson-python>=0.18", "meson>=1.8", "ninja>=1.11", "cython>=3.1"]

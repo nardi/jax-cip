@@ -3,6 +3,13 @@ name: Docs
 on:
   push:
     branches: [main]
+    paths:
+      - "docs/**"
+      - "src/**"
+      - "zensical.toml"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
 
 # Allow one concurrent deployment, cancelling in-progress runs.
 concurrency:
@@ -20,16 +27,13 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python
-        run: uv python install
-
+      # The API reference reads the sources and stubs under `src` without importing them,
+      # so the package itself is not installed.
       - name: Sync dependencies
-        # The API reference reads the sources and stubs under `src` without importing
-        # them, so the extension modules need not be built.
-        run: uv sync --locked --no-install-project
+        run: uv sync --locked --only-group docs
 
-      - name: Build site
-        run: uv run --no-sync mkdocs build --strict
+      - name: Build the documentation site
+        run: uv run --no-sync zensical build --strict
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
