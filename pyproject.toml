@@ -4,11 +4,12 @@ version = "0.1.0"
 description = "JAX functions as nonlinear expressions in the SCIP optimization solver"
 readme = "README.md"
 authors = [{ name = "Nardi Lam", email = "mail@nardilam.nl" }]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
-    "asdex",
+    # Version 0.5.2 of asdex needs Python 3.12 and JAX 0.11, so Python 3.11 gets 0.5.1.
+    "asdex>=0.5.1",
     "cyxla[cpu]>=0.1.1,<0.2",
-    "jax>=0.11,<0.12",
+    "jax>=0.10,<0.12",
     "jaxormick>=0.0.1",
     "jaxtyping>=0.2",
     "numpy>=1.26",
@@ -29,8 +30,6 @@ dev = [
     "hypothesis>=6",
     "lxml>=5",
     "markdown-pytest>=0.6.6",
-    "mkdocs-material>=9.7.6",
-    "mkdocstrings[python]>=0.27",
     "pytest>=9.1.0",
     "pytest-benchmark>=5",
     "pytest-cov>=7",
@@ -39,6 +38,8 @@ dev = [
     "ty>=0.0.59",
     "types-lxml>=2026.2.16",
 ]
+# The documentation site. The API reference reads the source, so it needs no build.
+docs = ["zensical>=0.0.73", "mkdocstrings-python>=2"]
 # An editable meson-python install rebuilds the extension modules on import, so the
 # build tools have to live in the environment itself rather than in an isolated one.
 build = ["meson-python>=0.18", "meson>=1.8", "ninja>=1.11", "cython>=3.1"]
@@ -52,9 +53,9 @@ config-settings = { setup-args = "-Dcoverage=true" }
 
 [tool.uv.sources]
 # This asdex commit fixes an empty sparsity pattern for functions that contain a
-# `jnp.where`. Released versions up to 0.5.2 have the bug.
-asdex = { git = "https://github.com/adrhill/asdex", rev = "da130b048b72c03e5ac1cb154968797bc32868b8" }
-jaxormick = { git = "https://github.com/nardi/jaxormick", rev = "06d12d85fcc6cc145b3db9b21ff854546e77bf93" }
+# `jnp.where`. Released versions up to 0.5.2 have the bug. Python 3.11 takes release 0.5.1.
+asdex = { git = "https://github.com/adrhill/asdex", rev = "da130b048b72c03e5ac1cb154968797bc32868b8", marker = "python_version >= '3.12'" }
+jaxormick = { git = "https://github.com/nardi/jaxormick", rev = "a55e44d7988ad1c7a1ecaddaa463db6099ea3d35" }
 
 [tool.pytest.ini_options]
 # The markdown docs and the README are collected by markdown-pytest, which runs code
@@ -99,16 +100,18 @@ exclude = ["src/jaxcip/_block.py", "src/jaxcip/_handler.py", "src/jaxcip/_proble
 # Only Linux on x86-64 is tested, so there are no wheels for other systems. The wheels
 # target glibc, because the PJRT CPU plugin has no musl build. The SCIP libraries need
 # glibc 2.34 and the C++ runtime of GCC 11, which `manylinux_2_28` does not allow.
-build = "cp312-* cp313-*"
+build = "cp311-* cp312-* cp313-*"
 skip = "*-musllinux_*"
 archs = ["x86_64"]
 manylinux-x86_64-image = "manylinux_2_34"
 # The released asdex lacks a fix that JAX-CIP needs, and JAXormick has no release on PyPI,
-# so the test environment takes both at the revisions of `tool.uv.sources`.
+# so the test environment takes both at the revisions of `tool.uv.sources`. Python 3.11
+# takes the released asdex 0.5.1, as in the dependencies above.
 before-test = '''
 pip install \
-    "asdex @ git+https://github.com/adrhill/asdex@da130b048b72c03e5ac1cb154968797bc32868b8" \
-    "jaxormick @ git+https://github.com/nardi/jaxormick@06d12d85fcc6cc145b3db9b21ff854546e77bf93"
+    "asdex @ git+https://github.com/adrhill/asdex@da130b048b72c03e5ac1cb154968797bc32868b8; python_version >= '3.12'" \
+    "asdex==0.5.1; python_version < '3.12'" \
+    "jaxormick @ git+https://github.com/nardi/jaxormick@a55e44d7988ad1c7a1ecaddaa463db6099ea3d35"
 '''
 test-command = "python {project}/scripts/smoke_test.py"
 # Meson-python bundles the libraries under file names that differ from their sonames, as

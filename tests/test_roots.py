@@ -34,6 +34,12 @@ SIZE = 2
 COUPLING = np.array([[0.3, -0.2], [0.1, 0.25]])
 """Coupling of the entries of the root, which makes its equations a system."""
 
+pytestmark = pytest.mark.skipif(
+    jax.__version_info__ < (0, 11),
+    reason="needs jax>=0.11, where JAXormick can read the residual of a root",
+)
+"""Roots take part in relaxations only from JAX 0.11 on."""
+
 
 def solve_newton(
     function: Callable[[jax.Array], jax.Array], guess: jax.Array
