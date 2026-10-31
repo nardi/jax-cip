@@ -55,7 +55,7 @@ config-settings = { setup-args = "-Dcoverage=true" }
 # This asdex commit fixes an empty sparsity pattern for functions that contain a
 # `jnp.where`. Released versions up to 0.5.2 have the bug. Python 3.11 takes release 0.5.1.
 asdex = { git = "https://github.com/adrhill/asdex", rev = "da130b048b72c03e5ac1cb154968797bc32868b8", marker = "python_version >= '3.12'" }
-jaxormick = { git = "https://github.com/nardi/jaxormick", rev = "06d12d85fcc6cc145b3db9b21ff854546e77bf93" }
+jaxormick = { git = "https://github.com/nardi/jaxormick", rev = "a55e44d7988ad1c7a1ecaddaa463db6099ea3d35" }
 
 [tool.pytest.ini_options]
 # The markdown docs and the README are collected by markdown-pytest, which runs code
@@ -111,7 +111,7 @@ before-test = '''
 pip install \
     "asdex @ git+https://github.com/adrhill/asdex@da130b048b72c03e5ac1cb154968797bc32868b8; python_version >= '3.12'" \
     "asdex==0.5.1; python_version < '3.12'" \
-    "jaxormick @ git+https://github.com/nardi/jaxormick@06d12d85fcc6cc145b3db9b21ff854546e77bf93"
+    "jaxormick @ git+https://github.com/nardi/jaxormick@a55e44d7988ad1c7a1ecaddaa463db6099ea3d35"
 '''
 test-command = "python {project}/scripts/smoke_test.py"
 # Meson-python bundles the libraries under file names that differ from their sonames, as
