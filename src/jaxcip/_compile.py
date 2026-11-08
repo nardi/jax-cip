@@ -13,7 +13,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from types import TracebackType
-from typing import Any, NamedTuple, Never, Self
+from typing import Any, NamedTuple, Never, ParamSpec, Self, TypeVar
 
 import cyxla
 import jax
@@ -47,6 +47,12 @@ from jaxcip._programs import (
     term_signature,
 )
 from jaxcip._types import Domain, Programs, Sense
+
+SubmittedParameters = ParamSpec("SubmittedParameters")
+"""The parameters of a function that an executor runs."""
+
+SubmittedResult = TypeVar("SubmittedResult")
+"""The result of a function that an executor runs."""
 
 COMPILED_TERMS_LIMIT = 64
 """Number of terms whose handles the process keeps after their problems are gone.
@@ -167,15 +173,15 @@ class BuiltPrograms(NamedTuple):
 class InlineExecutor(Executor):
     """An executor that runs each call at once on the calling thread."""
 
-    def submit[**Parameters, Result](
+    def submit(
         self,
-        function: Callable[Parameters, Result],
+        function: Callable[SubmittedParameters, SubmittedResult],
         /,
-        *args: Parameters.args,
-        **kwargs: Parameters.kwargs,
-    ) -> Future[Result]:
+        *args: SubmittedParameters.args,
+        **kwargs: SubmittedParameters.kwargs,
+    ) -> Future[SubmittedResult]:
         """Runs a call and returns a future that is already done."""
-        future: Future[Result] = Future()
+        future: Future[SubmittedResult] = Future()
         try:
             future.set_result(function(*args, **kwargs))
         except Exception as error:

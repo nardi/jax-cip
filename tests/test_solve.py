@@ -493,6 +493,10 @@ def cubic_root(x: jax.Array) -> jax.Array:
     return lax.custom_root(residual, 0.0, newton, tangent_solve)
 
 
+@pytest.mark.skipif(
+    jax.__version_info__ < (0, 11),
+    reason="needs jax>=0.11, where JAXormick can read the residual of a root",
+)
 @pytest.mark.integration
 def test_implicit_root_term() -> None:
     """Checks that a root found by `lax.custom_root` compiles and solves in the PJRT plugin.

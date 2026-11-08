@@ -2,7 +2,14 @@
 
 JAX-CIP builds from source with [Meson](https://mesonbuild.com/) and runs its programs
 through [cyxla](https://nardi.github.io/cyxla/). CI tests it on Linux x86-64 with Python
-3.12 and 3.13.
+3.11, 3.12 and 3.13.
+
+## Python and JAX versions
+
+JAX-CIP works with JAX 0.10 and 0.11. Release 0.5.2 of
+[asdex](https://pypi.org/project/asdex/), which detects sparsity, needs Python 3.12 and
+JAX 0.11, and does not import on JAX 0.12. Python 3.11 therefore installs JAX 0.10 and
+release 0.5.1 of asdex, which has the same interface for everything JAX-CIP uses.
 
 ## SCIP
 

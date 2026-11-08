@@ -504,13 +504,16 @@ def trace_views(
             for key in SUBJAXPR_PARAMETERS
             if key in equation.params
         )
+        inner = body_jaxpr(body)
         operand_views = {
-            inner: operand_view
-            for inner, operand in zip(body.jaxpr.invars, equation.invars, strict=True)
+            inner_variable: operand_view
+            for inner_variable, operand in zip(
+                inner.invars, equation.invars, strict=True
+            )
             if (operand_view := view(operand)) is not None
         }
-        inner_view = trace_views(body.jaxpr, operand_views)
-        return inner_view(body.jaxpr.outvars[equation.outvars.index(var)])
+        inner_view = trace_views(inner, operand_views)
+        return inner_view(inner.outvars[equation.outvars.index(var)])
 
     return view
 
@@ -924,6 +927,14 @@ def propagate(
     return known
 
 
+def body_jaxpr(body: Jaxpr | ClosedJaxpr) -> Jaxpr:
+    """Returns the open jaxpr of a call body.
+
+    Before JAX 0.11, the body of `checkpoint` is an open jaxpr and not a closed one.
+    """
+    return body.jaxpr if isinstance(body, ClosedJaxpr) else body
+
+
 def equation_linearity(equation: JaxprEqn, inputs: list[Linearity]) -> list[Linearity]:
     """Returns the linearity of each output of one equation."""
     count = len(equation.outvars)
@@ -942,6 +953,8 @@ def equation_linearity(equation: JaxprEqn, inputs: list[Linearity]) -> list[Line
             return linearity_of(
                 body.jaxpr, inputs, [Linearity.CONSTANT] * len(body.consts)
             )
+        case Jaxpr():
+            return linearity_of(body, inputs, [])
     if most is Linearity.NONLINEAR:
         return [Linearity.NONLINEAR] * count
     if name in LINEAR_PRIMITIVES:
