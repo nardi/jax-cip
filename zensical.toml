@@ -32,7 +32,16 @@ nav = [
   ] },
 ]
 
+# The dropdown of the page title that switches to the other documentation sites,
+# which the theme lists by default.
+[project.extra.site_switcher]
+current = "jax-cip"
+
 [project.theme]
+# The Tufte theme comes from the `theme` submodule and extends the built-in theme. It
+# loads its own fonts, so the built-in theme loads none from Google Fonts.
+custom_dir = "theme/zensical_tufte"
+font = false
 features = [
   "content.code.copy",
   "navigation.sections",
@@ -58,6 +67,11 @@ toggle.name = "Switch to light mode"
 
 [project.markdown_extensions.pymdownx.arithmatex]
 generic = true
+
+# The directory of the theme contains two files of its Python packaging, which the site
+# does not need.
+[project.plugins.exclude]
+glob = ["mkdocs_theme.yml", "__init__.py", "__pycache__/*"]
 
 [project.plugins.mkdocstrings.handlers.python]
 paths = ["src"]
