@@ -22,8 +22,11 @@ A constant factor is part of the cut when the cut has a single entry, as in
 tolerance, so a factor outside the cut changes which solutions pass that check. On
 `min 0.2x⁵ − 1.7x⁴ + x³ − 0.02x² + 10⁻⁴x` over `[0, 10]`, SCIP needs about 60 nodes with
 the factors inside the cuts and between 80 and 40000, depending on the coefficients,
-with them outside. The factors of a vector cut are left outside the cut, in \(A\), where
-they keep the matrix sparse.
+with them outside. The factors of a vector cut are left outside the cut, in \(A\). Inside
+the cut, a matrix product such as \(W\,f(x)\) would make each entry of the cut depend on
+every entry of \(f\), and so on every variable that \(f\) reads. Outside the cut, each
+entry of \(f(x)\) reads only its own variables, and the entries of \(W\) are
+coefficients in \(A\).
 
 Everything between the cuts and the output is affine in the cut entries \(F\), the
 variables \(x\) and the constants. A row of the problem is therefore

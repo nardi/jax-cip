@@ -33,10 +33,8 @@ JAX-CIP finds.
 
 JAX-CIP solves 331 of the 427 instances that native SCIP solves, and 7 that native SCIP
 does not finish, such as `alkylation` and `batch_nc`. Over the instances both solve, the
-median JAX-CIP run takes 2.4 times as long and 1.24 times as many nodes. The prototype
-solved 202 of the 236 instances of a smaller selection with a median time ratio of 2.0.
-The times do not include building the programs, since `solving_seconds` measures only
-SCIP's solve.
+median JAX-CIP run takes 2.4 times as long and 1.24 times as many nodes. The times do
+not include building the programs, since `solving_seconds` measures only SCIP's solve.
 
 Most of the instances that only native SCIP solves time out with JAX-CIP. SCIP detects
 structure in its own expressions that it cannot detect in an opaque term, such as the
