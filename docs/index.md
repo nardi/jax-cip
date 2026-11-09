@@ -4,8 +4,8 @@ JAX functions as nonlinear expressions in the [SCIP](https://www.scipopt.org/)
 optimization solver.
 
 SCIP finds global optima of mixed-integer nonlinear problems, but it needs each
-nonlinear function as an expression tree of its own operators. JAX-CIP gives SCIP a JAX
-function instead. It compiles the function into programs for its value, gradient,
+nonlinear function as an expression tree of its own operators. With JAX-CIP, SCIP uses a
+JAX function instead. It compiles the function into programs for its value, gradient,
 Hessian-vector products, interval bounds and the convex and concave relaxations from
 [JAXormick](https://nardi.github.io/jaxormick/), and SCIP calls them through an
 expression handler. A problem can then contain anything that JAX traces and JAXormick
@@ -13,12 +13,12 @@ relaxes, including `lax.fori_loop`, `lax.scan`, `jnp.linalg` and special functio
 
 A problem is an immutable description over a pytree of variables:
 
-- [`Problem`][jaxcip.Problem] holds the variables, the objective and the constraints,
-- [`compile`][jaxcip.compile] turns its functions into SCIP expressions once, and
+- [`Problem`][jaxcip.Problem] contains the variables, the objective and the constraints,
+- [`compile`][jaxcip.compile] converts its functions into SCIP expressions once, and
 - [`solve`][jaxcip.solve] solves it for any parameter values with the same shapes.
 
-[`solve_file`][jaxcip.solve_file] solves a problem file with SCIP's own readers, which
-gives a reference for the same problem written natively.
+[`solve_file`][jaxcip.solve_file] solves a problem file with SCIP's own readers. Its
+result is a reference for the same problem written in SCIP's own formats.
 
 ## Quick example
 
@@ -58,11 +58,11 @@ assert abs(solution.objective - (-1.0316)) < 1e-3
 
 ## Comparison with native SCIP
 
-JAX-CIP solves 331 of the 427 small [MINLPLib](https://www.minlplib.org/) instances
-that native SCIP solves within a minute, and every optimum it reports is the known one.
-It needs more nodes and more time, because SCIP sees each JAX term as one opaque function and loses the
-structure it detects in its own expressions. The [comparison page](guide/comparison.md)
-lists the numbers for every instance.
+JAX-CIP solves 331 of the 427 small [MINLPLib](https://www.minlplib.org/) instances that
+native SCIP solves within a minute, and every optimum it reports is the known one. It
+needs more nodes and more time, because each JAX term is one opaque expression in SCIP,
+and SCIP cannot detect structure inside it as it does in its own expressions. The
+[comparison page](guide/comparison.md) lists the numbers for every instance.
 
 ## License
 

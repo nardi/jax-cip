@@ -1,26 +1,27 @@
 # Installation
 
 JAX-CIP builds from source with [Meson](https://mesonbuild.com/) and runs its programs
-through [cyxla](https://nardi.github.io/cyxla/). CI tests it on Linux x86-64 with Python
+with [cyxla](https://nardi.github.io/cyxla/). CI tests it on Linux x86-64 with Python
 3.12 and 3.13.
 
 ## SCIP
 
-The extension modules link SCIP 10.1 with SoPlex and Ipopt from the
-[SCIP_jll](https://github.com/JuliaBinaryWrappers/SCIP_jll.jl) binaries that Julia
-publishes. [meson-jll](https://github.com/nardi/meson-jll) turns those packages into
-Meson wraps, and the repository commits the wraps for every platform under
-`subprojects`, pinned by `meson-jll.lock`. Meson downloads the tarballs it needs on the
-first build, so you don't need SCIP installed on the system.
+The extension modules are linked against SCIP 10.1 with SoPlex and Ipopt from the
+[SCIP_jll](https://github.com/JuliaBinaryWrappers/SCIP_jll.jl) binaries, which are
+published as Julia packages. [meson-jll](https://github.com/nardi/meson-jll) generates
+Meson wraps from those packages. The wraps for every platform are committed under
+`subprojects` and pinned by `meson-jll.lock`. Meson downloads the tarballs it needs on
+the first build, so you don't need SCIP installed on the system.
 
 ## PJRT plugin
 
 JAX-CIP runs its programs through the [PJRT C
 API](https://openxla.org/xla/pjrt/pjrt_integration), outside the Python interpreter, so
-that SCIP's callbacks never take the GIL. cyxla compiles the programs and declares the
-functions that run them. jaxlib links its CPU client statically and ships
-no plugin library, so the CPU plugin is a separate wheel, `cyxla-pjrt-cpu`. JAX-CIP
-depends on `cyxla[cpu]`, which installs both, so `uv sync` needs no further step.
+that SCIP's callbacks never acquire the GIL. cyxla compiles the programs and declares
+the functions that run them. `jaxlib` links its CPU client statically and contains no
+plugin library, so the CPU plugin is a separate wheel, `cyxla-pjrt-cpu`. JAX-CIP depends
+on `cyxla[cpu]`, which installs `cyxla` and `cyxla-pjrt-cpu`, so `uv sync` needs no
+further step.
 
 `cyxla.initialize` loads another plugin, or the same one with other options. Call it
 before compiling the first problem. The [cyxla
@@ -49,11 +50,12 @@ uv run --no-sync pytest benchmarks -o addopts="" --benchmark-only
 
 ## Tests
 
-The tests have two groups. The unit tests solve small problems and cover all the code, and
-`uv run pytest -m unit` runs only them. The integration tests compare configurations with
-native SCIP, run longer solves and start new processes. The code blocks of the README and
-of these pages count as integration tests as well, and `uv run pytest -m integration`
-runs them. The MINLPLib instances need the `--minlplib` option.
+The tests are split into two groups. The unit tests solve small problems and cover all
+the code, and `uv run pytest -m unit` runs only them. The integration tests compare
+configurations with native SCIP, run longer solves and start new processes. The code
+blocks of the README and of these pages are integration tests as well, and
+`uv run pytest -m integration` runs them. The MINLPLib instances need the `--minlplib`
+option.
 
 ## Environment variables
 

@@ -5,8 +5,8 @@
 A [`Variable`][jaxcip.Variable] is an array of decision variables with bounds and a
 [`Domain`][jaxcip.Domain]. Its shape is the broadcast of `shape` and the shapes of the
 bounds. The variables of a problem are any pytree with a `Variable` at every leaf, and
-the functions of the problem receive the same pytree with an array at every leaf. A
-`NamedTuple` gives the leaves names:
+the functions of the problem receive the same pytree with an array at every leaf. With a
+`NamedTuple`, the leaves have names:
 
 <!-- name: test_basic -->
 ```python
@@ -37,7 +37,7 @@ Without them it can only branch until propagation bounds the variables.
 ## Objective and constraints
 
 Every function of a problem has the signature `f(x, params)`. The objective returns a
-scalar, and [`Sense`][jaxcip.Sense] picks the direction. A
+scalar, and [`Sense`][jaxcip.Sense] selects minimization or maximization. A
 [`Constraint`][jaxcip.Constraint] bounds every entry of its function's output:
 
 <!-- name: test_basic -->
@@ -74,9 +74,9 @@ problem = jcp.Problem(
 )
 ```
 
-The last constraint has a vector output, so it gives two rows with their own bounds.
-Both rows here are affine, so SCIP gets them as linear rows. A problem without an
-objective is a feasibility problem.
+The last constraint has a vector output, so it adds two rows, each with its own bound.
+Both rows here are affine, so they are added to SCIP as linear rows. A problem without
+an objective is a feasibility problem.
 
 ## Solutions
 
@@ -103,14 +103,14 @@ and `gap` the relative distance between them. `x` is `None` when SCIP found no s
 ## Supported operations
 
 A function may use anything that `jax.make_jaxpr` traces and JAXormick relaxes. That
-covers `jax.numpy` arithmetic and elementary functions, reductions, indexing,
+includes `jax.numpy` arithmetic and elementary functions, reductions, indexing,
 `lax.fori_loop`, `lax.scan`, `lax.cond`, linear solves and roots from `lax.custom_root`.
-[Roots and warm starts](../theory/jax.md#roots-and-warm-starts) lists what to watch for
-with roots. The [supported operations of
+[Roots and warm starts](../theory/jax.md#roots-and-warm-starts) lists the restrictions
+on roots. The [supported operations of
 JAXormick](https://nardi.github.io/jaxormick/guide/supported/) list the rest. Functions
 receive integer and binary variables as floats, so `x.units[0] * x.flow[1]` is a product
 of two floats.
 
 Importing `jaxcip` switches JAX to 64-bit floats with `jax_enable_x64`, since SCIP works
-in double precision. Arrays made before the import stay 32-bit, and their rounded values
-become the coefficients of the problem.
+in double precision. Arrays created before the import remain 32-bit, and their rounded
+values are the coefficients of the problem.
