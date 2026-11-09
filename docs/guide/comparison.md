@@ -1,26 +1,28 @@
 # Comparison with native SCIP
 
-The suite in `tests/minlplib` solves each [MINLPLib](https://www.minlplib.org/)
-instance twice. Native SCIP reads the OSiL file with its own reader and builds its own
+The suite in `tests/minlplib` solves each [MINLPLib](https://www.minlplib.org/) instance
+twice. Native SCIP reads the OSiL file with its own reader and builds its own
 expressions. JAX-CIP converts the same file into a [`Problem`][jaxcip.Problem] with one
-JAX function per nonlinear row, and SCIP sees each term of a function as one opaque
-expression. The converter groups the monomials of a row by their exponents and writes
-each group as one product over gathered variables. A row with 24 cubic terms then
-compiles its convex program in 0.2 seconds instead of 9.4. The suite then checks that:
+JAX function per nonlinear row, and each term of a function is one opaque expression in
+SCIP. The converter groups the monomials of a row by their exponents and writes each
+group as one product over gathered variables. For a row with 24 cubic terms, compiling
+the convex program then takes 0.2 seconds instead of 9.4. The suite then checks that:
 
 - an optimal objective equals the known optimum from `minlplib.solu`, or native SCIP's
   when MINLPLib knows none,
 - SCIP's own reading of the instance accepts JAX-CIP's primal solution,
-- the dual bound never passes the known optimum,
+- the dual bound is never above the known optimum of a minimization, or below that of a
+  maximization,
 - an infeasible instance yields no solution.
 
-A timeout is recorded and not failed.
+A timeout is recorded and does not fail the test.
 
 ## Instances
 
-The full run covers the 471 instances with a known optimum or a proof of infeasibility,
-at most 60 variables and no semicontinuous variables or SOS constraints. The quick tier in `tests/minlplib/quick.txt` holds the 235
-of them that both solvers finish in about a second, and it runs on every push.
+The full run includes the 471 instances with a known optimum or a proof of
+infeasibility, at most 60 variables and no semicontinuous variables or SOS constraints.
+The quick tier in `tests/minlplib/quick.txt` contains the 235 of them that both solvers
+finish in about a second, and it runs on every push.
 
 ## Results
 
@@ -31,15 +33,13 @@ JAX-CIP finds.
 
 JAX-CIP solves 331 of the 427 instances that native SCIP solves, and 7 that native SCIP
 does not finish, such as `alkylation` and `batch_nc`. Over the instances both solve, the
-median JAX-CIP run takes 2.4 times as long and 1.24 times as many nodes. The prototype
-solved 202 of the 236 instances of a smaller selection with a median time ratio of 2.0.
-The times leave out building the programs, since `solving_seconds` counts SCIP's solve
-only.
+median JAX-CIP run takes 2.4 times as long and 1.24 times as many nodes. The times do
+not include building the programs, since `solving_seconds` measures only SCIP's solve.
 
 Most of the instances that only native SCIP solves time out with JAX-CIP. SCIP detects
-structure in its own expressions that an opaque term hides, such as the convex norms of
-`cvxnonsep_normcon*` and the complementarity products of `ex9_1_2` and `ex9_1_8`, whose
-dual bounds stall without it.
+structure in its own expressions that it cannot detect in an opaque term, such as the
+convex norms of `cvxnonsep_normcon*` and the complementarity products of `ex9_1_2` and
+`ex9_1_8`. Without that structure, the dual bounds of these instances stop improving.
 
 ## Known limitations
 
@@ -47,17 +47,17 @@ dual bounds stall without it.
   on the same instances.
 - `ghg_1veh` takes 411 seconds to build its programs, most of them for its 127 rows with
   products, which multiply an exponential by a sum and so are not monomials. The rows of
-  the `cvxnonsep_nsig*` and `cvxnonsep_psig40` instances, with up to 40 factors, take 21 to
-  29 seconds. The converter multiplies four or more factors as one `jnp.prod`, which
-  JAXormick relaxes in log₂ n levels. A chain of `*` takes minutes and gigabytes to
-  compile at 30 factors.
+  the `cvxnonsep_nsig*` and `cvxnonsep_psig40` instances, with up to 40 factors, take 21
+  to 29 seconds to build. The converter writes a product of four or more factors as one
+  `jnp.prod`, which JAXormick relaxes in log₂ n levels. Compiling a chain of `*` with 30
+  factors takes minutes and gigabytes of memory.
 - A problem with hundreds of distinct terms can reach Linux's limit on memory mappings,
   as [Performance](performance.md#build-time) describes.
 
-## Running the comparison
+## Commands for the comparison
 
 `scripts/fetch_minlplib.py` downloads the OSiL files, `minlplib.solu` and
-`instancedata.csv`. Point `JAXCIP_MINLPLIB_DIR` at its directory and set
+`instancedata.csv`. Set `JAXCIP_MINLPLIB_DIR` to the directory of these files and set
 `JAXCIP_MINLPLIB_RESULTS` to a file for the results, then run
 
 ```console

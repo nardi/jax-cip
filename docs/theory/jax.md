@@ -1,10 +1,11 @@
 # JAX functions in SCIP
 
-This page follows a JAX function from `Problem` to the callbacks of SCIP's expression
-handler. [Bradbury et al. (2018)](references.md) describe JAX itself, and [Frostig et
-al. (2018)](references.md) its tracing design. The relaxations come from
-[JAXormick](https://nardi.github.io/jaxormick/), whose documentation covers McCormick
-relaxations ([McCormick 1976](references.md), [Mitsos et al. 2009](references.md)).
+This page describes each step from a JAX function in a `Problem` to the callbacks of
+SCIP's expression handler. [Bradbury et al. (2018)](references.md) describe JAX itself,
+and [Frostig et al. (2018)](references.md) its tracing design. The relaxations are
+computed by [JAXormick](https://nardi.github.io/jaxormick/), whose documentation
+describes McCormick relaxations ([McCormick 1976](references.md), [Mitsos et al.
+2009](references.md)).
 
 ## Jaxpr analysis
 
@@ -16,13 +17,16 @@ slices, concatenations and the like. It stops at the largest nonlinear values, t
 *cuts*. For `jnp.sum(x**4 - 16*x**2 + 5*x)` the cuts are `x**4` and `x**2`, each with one
 entry per variable.
 
-A constant factor stays inside the cut when the cut has a single entry, as in
+A constant factor is part of the cut when the cut has a single entry, as in
 `3.0*x[0]**2`. SCIP checks an auxiliary variable against its cut with an absolute
 tolerance, so a factor outside the cut changes which solutions pass that check. On
-`min 0.2x⁵ − 1.7x⁴ + x³ − 0.02x² + 10⁻⁴x` over `[0, 10]`, SCIP needs about 60 nodes with the
-factors inside the cuts and between 80 and 40000, depending on the coefficients, with them
-outside. The factors of a vector cut stay outside, in \(A\), where they keep the matrix
-sparse.
+`min 0.2x⁵ − 1.7x⁴ + x³ − 0.02x² + 10⁻⁴x` over `[0, 10]`, SCIP needs about 60 nodes with
+the factors inside the cuts and between 80 and 40000, depending on the coefficients,
+with them outside. The factors of a vector cut are left outside the cut, in \(A\). Inside
+the cut, a matrix product such as \(W\,f(x)\) would make each entry of the cut depend on
+every entry of \(f\), and so on every variable that \(f\) reads. Outside the cut, each
+entry of \(f(x)\) reads only its own variables, and the entries of \(W\) are
+coefficients in \(A\).
 
 Everything between the cuts and the output is affine in the cut entries \(F\), the
 variables \(x\) and the constants. A row of the problem is therefore
@@ -31,31 +35,31 @@ variables \(x\) and the constants. A row of the problem is therefore
 \text{lower} \le A\,F(x, p) + B\,x + c \le \text{upper},
 \]
 
-and ASDEX finds \(A\), \(B\) and \(c\) as the sparse Jacobian of that affine remainder
-at zero. The sparsity pattern and its coloring are fixed when the problem is compiled.
-Only their values depend on the parameters, so they are evaluated again at every solve:
-a matrix \(W\) in the parameters, as in \(W\,f(x)\), gives \(A = W\) without
-compiling again.
+and ASDEX computes \(A\), \(B\) and \(c\) as the sparse Jacobian of that affine
+remainder at zero. The sparsity pattern and its coloring are fixed when the problem is
+compiled. Only the values of \(A\), \(B\) and \(c\) depend on the parameters, so these
+values are evaluated again at every solve: a matrix \(W\) in the parameters, as in
+\(W\,f(x)\), gives \(A = W\) without compiling again.
 
-- The linear part \(B x + c\) goes to SCIP as linear coefficients. SCIP propagates and
-  separates linear terms exactly, and inside an opaque function they would only weaken the
-  relaxation. A constraint with no cut becomes a plain linear row.
-- Each cut becomes a term, a jaxpr of its own inputs. A term keeps only the variable
-  entries it reads. Static indexing such as `x[3]` or `x[2:5]` selects entries, and any
-  other use of a leaf reads all of it.
+- The linear part \(B x + c\) is passed to SCIP as linear coefficients. SCIP propagates
+  and separates linear terms exactly, and inside an opaque function they would only
+  weaken the relaxation. A constraint with no cut becomes a plain linear row.
+- Each cut becomes a term, a jaxpr of its own inputs. The inputs of a term are only the
+  variable entries it reads. Static indexing such as `x[3]` or `x[2:5]` selects entries,
+  and any other use of a leaf reads all of it.
 - A cut whose entries all read most of its variables is not separated from the linear
   operation that follows it. Otherwise `jnp.sum` over \(n\) such entries would give SCIP
   \(n\) expressions with \(n\) children each, where the sum has one. The same holds for a
   cut with at most 64 entries times inputs, which would only add callbacks.
 
 With `split_sums=False` in [`CompileOptions`][jaxcip.CompileOptions] the output is the
-only cut. Separate cuts give SCIP more auxiliary variables and tighter relaxations, since
-JAXormick relaxes each cut over its own smaller box. They also cost more LP rows, and
-splitting is the default.
+only cut. Separate cuts give SCIP more auxiliary variables and tighter relaxations,
+since JAXormick relaxes each cut over its own smaller box. They also add more LP rows,
+and splitting is the default.
 
 Every entry of a cut becomes one SCIP expression, whose children are the variables the
-entry reads. A row is a sum of such expressions with the coefficients of \(A\), so one
-SCIP nonlinear constraint per row.
+entry reads. A row is a sum of such expressions with the coefficients of \(A\), and each
+row is one SCIP nonlinear constraint.
 
 ## The six programs
 
@@ -84,19 +88,21 @@ gradient interval program, and SCIP treats its monotonicity as unknown.
 ## Blocks
 
 A cut with several entries is a *block*. The programs of a block take the same inputs as
-above and give all entries at once, with their derivatives in the order of a fixed
-sparsity pattern. ASDEX finds the pattern from the jaxpr, so the entries of `x[:-1] * x[1:]`
-read two variables each, and an entry that reads no variable still gets one child with
-derivative zero. A coloring of the pattern compresses every derivative: a program takes
-one forward-mode derivative per color, not one per variable. The Hessian-vector program
-is the derivative of the compressed Jacobian, the relaxation programs differentiate the
-relaxation, and the gradient interval program is the interval extension of the compressed
-Jacobian. Each entry's expression gets the entry's slice of those outputs.
+above and return all entries at once, with their derivatives in the order of a fixed
+sparsity pattern. ASDEX detects the pattern in the jaxpr, so the entries of
+`x[:-1] * x[1:]` read two variables each, and an entry that reads no variable still has
+one child with derivative zero. A coloring of the pattern compresses every derivative: a
+program computes one forward-mode derivative per color, not one per variable. The
+Hessian-vector program is the derivative of the compressed Jacobian, the relaxation
+programs differentiate the relaxation, and the gradient interval program is the interval
+extension of the compressed Jacobian. The expression of each entry reads its own slice
+of those outputs.
 
-A block of 64 entries therefore compiles in the time of one scalar cut, and a solve has no
-dense Jacobian. Blocks have no warm start of roots, which would need one for each entry.
-A term of [`rows`][jaxcip.rows] is the scalar function of one row, with a different
-gather of the variables in each, and is not a block.
+A block of 64 entries therefore compiles in the time of one scalar cut, and no dense
+Jacobian is computed during a solve. Roots in blocks are not warm started, because that
+would need a separate guess for each entry. A term of [`rows`][jaxcip.rows] is the
+scalar function of one row, evaluated on a different gather of the variables for each
+row, and is not a block.
 
 ## Estimators from relaxations
 
@@ -118,7 +124,7 @@ Given an upper bound \(u\) on \(f\), an underestimator gives the linear inequali
 \(a^\top x + b \le u\), which bounds each variable. An overestimator does the same with
 the lower bound of \(f\).
 
-On a node where an input is unbounded, the handler returns no estimator, because the
+At a node where an input is unbounded, the handler returns no estimator, because the
 relaxations need a finite box, and SCIP branches instead.
 
 ## Execution through PJRT
@@ -127,37 +133,40 @@ JAX-CIP exports each program with `jax.export` to
 [StableHLO](https://openxla.org/stablehlo), and [cyxla](https://nardi.github.io/cyxla/)
 compiles it with the PJRT plugin into an executable. The callbacks are C functions that
 run the executables through the runtime of cyxla and the [PJRT C
-API](https://openxla.org/xla/pjrt/pjrt_integration) without taking the GIL. The input
+API](https://openxla.org/xla/pjrt/pjrt_integration) without acquiring the GIL. The input
 buffers are 64-byte aligned host memory that the plugin reads directly, and the handler
-reads outputs from the plugin's buffers when it allows that, so a call copies nothing.
+reads outputs from the plugin's buffers when the plugin allows that, so no data is
+copied in a call.
 
 All expressions of one term share its executables and differ only in their parameter
-vectors and children. A thousand [`rows`][jaxcip.rows] of one form therefore compile once.
-JAX-CIP caches terms in the process, keyed by their jaxpr, signature and options. The disk cache stores the StableHLO and the executables, so a
-later process will skip lowering and compiling.
+vectors and children. A thousand [`rows`][jaxcip.rows] of one form are therefore
+compiled once. JAX-CIP caches terms in the process, keyed by their jaxpr, signature and
+options. The disk cache stores the StableHLO and the executables, so a later process
+does not lower or compile them again.
 
 ## Caches in the handler
 
-SCIP often asks for the same result twice, since `BWDIFF` follows `EVAL` at the same
+SCIP often requests the same result twice, since `BWDIFF` follows `EVAL` at the same
 point and propagation repeats interval evaluations on unchanged boxes. Each expression
-keeps its last few points, boxes and estimators, and answers from them when the inputs
-match bit for bit. `EVAL` also runs the value and gradient program, so the gradient that
-SCIP asks for next is already there. You can switch each of these off in
-[`HandlerOptions`][jaxcip.HandlerOptions] to measure what it gains.
+stores its last few points, boxes and estimators, and returns the stored result when the
+inputs match bit for bit. `EVAL` also runs the value and gradient program, so the
+gradient that SCIP requests next is already computed. You can switch each of these off
+in [`HandlerOptions`][jaxcip.HandlerOptions] to measure its effect.
 
-The entries of a block share their runs. Every program run reads the inputs of the whole
-block and keeps all entries' outputs, and a run is valid for an entry exactly when the
-inputs the run read at the entry's children are the current ones, because the entry
-depends on nothing else. When an entry needs a run, the handler first sets the inputs of
-the other entries from SCIP's state: the point of the evaluation for `EVAL`, the bounds
-that SCIP's interval evaluation gives for `INTEVAL`, and the LP solution with the local
-bounds for `ESTIMATE`. The run then answers the next entries' callbacks too, one run per
-callback type and round instead of one per entry. A wrong guess costs a run and never a
-wrong result, since each entry checks its own children. The `prefetch` switch of
+One program run computes all entries of a block. Every run reads the inputs of the whole
+block, and the handler stores the outputs of all entries. A run is valid for an entry
+exactly when the inputs the run read at the entry's children are the current ones,
+because the entry depends on nothing else. When an entry needs a run, the handler first
+sets the inputs of the other entries from SCIP's state: the point of the evaluation for
+`EVAL`, the bounds that SCIP's interval evaluation gives for `INTEVAL`, and the LP
+solution with the local bounds for `ESTIMATE`. The callbacks of the other entries then
+use the stored outputs of that run, so there is one run per callback type and round
+instead of one per entry. A wrong guess leads to an extra run and never to a wrong
+result, since each entry checks the inputs at its own children. The `prefetch` switch of
 [`HandlerOptions`][jaxcip.HandlerOptions] turns this off.
 
-Each SCIP instance keeps its own state for every block, and so does a copy that SCIP
-makes for a heuristic, so solves in several threads share no input buffers.
+Each SCIP instance has its own state for every block, and so does a copy of SCIP that is
+made for a heuristic, so solves in several threads do not share input buffers.
 
 ## Roots and warm starts
 
@@ -167,46 +176,49 @@ operator, that the equation has exactly one solution on the box. The value and d
 programs run the solver itself.
 
 Newton's method needs a step or two when it starts close to the root, so the handler
-passes the root of the previous run as the next guess. Each expression keeps its own
-roots, and the gradient program returns them as a third output. The Hessian-vector program
-takes them as an input. Entries that no run has set use the guess written in the term. For
-a system of 12 unknowns, a run takes 68 µs when \(x\) repeats and 125 µs when \(x\) moves a
-little, against 200 µs from the written guess.
+passes the root of the previous run as the next guess. Each expression stores its own
+roots, and the gradient program returns them as a third output. The Hessian-vector
+program takes them as an input. Entries without a stored root use the initial guess
+written in the term. For a system of 12 unknowns, a run takes 68 µs when \(x\) is
+unchanged and 125 µs when \(x\) changes slightly, against 200 µs from the written guess.
 
 The relaxation programs reuse the enclosures of roots in the same way. An enclosure that
-the Krawczyk operator verified on a box holds the unique root for every point of that box,
-so it also holds on every box inside it. Each expression stores the enclosures that its
-runs verified together with their boxes. A relaxation program starts from the enclosure of
-the smallest stored box that contains its own, and skips the solver and the search for an
-enclosure. The program returns the enclosure it verified, which the handler stores in turn.
-Branching shrinks boxes, so most boxes have a stored parent. The store holds the eight most
-recent boxes, and a sibling box never uses an enclosure of its sibling, since the check is
-that the stored box contains the current one. On a system of 6 unknowns, the convex and
-interval programs take 100 to 150 µs on a box with a stored parent, against 250 to 280 µs without.
+the Krawczyk operator verified on a box contains the unique root for every point of that
+box, so it is also valid on every box inside it. Each expression stores the enclosures
+that its runs verified together with their boxes. A relaxation program starts from the
+enclosure of the smallest stored box that contains its own, and does not run the solver
+or the search for an enclosure. The program returns the enclosure it verified, which the
+handler stores in turn. Branching shrinks boxes, so most boxes have a stored parent. The
+store contains the eight most recent boxes, and a sibling box never uses an enclosure of
+its sibling, since the check is that the stored box contains the current one. On a
+system of 6 unknowns, the convex and interval programs take 100 to 150 µs on a box with
+a stored parent, against 250 to 280 µs without.
 
 - A Newton step after the solver gives the same root to machine precision from every
   guess, so values that SCIP compares do not depend on the order of the callbacks. That
   step has no derivative, because `lax.custom_root` takes derivatives from the implicit
   function theorem.
-- Only roots at the top level of a term take a warm start. A root inside `jax.jit`, a loop
-  or a branch keeps its own guess.
-- A block, a cut with several entries, takes no warm start. ASDEX cannot analyse a root, so
-  every entry of such a cut reads every variable. The cut then joins the sum or product
-  that follows it, and the root stays in a term with one entry.
-- The root must be unique. JAXormick proves that on every box for the relaxations, but the
-  value programs do not check it. With several roots, the guess picks one, and the value
-  and the relaxations can disagree.
+- Only roots at the top level of a term are warm started. A root inside `jax.jit`, a
+  loop or a branch always starts from its own initial guess.
+- Roots in a block, a cut with several entries, are not warm started. ASDEX cannot
+  analyse a root, so every entry of such a cut reads every variable. The cut is then not
+  separated from the sum or product that follows it, so the root is in a term with one
+  entry.
+- The root must be unique. JAXormick proves that on every box for the relaxations, but
+  the value programs do not check it. With several roots, the guess determines which one
+  the solver finds, and the value and the relaxations can disagree.
 - JAXormick has no rule for the gradient of a root, so the term has no gradient interval
   program and SCIP treats its monotonicity as unknown.
 - The Krawczyk operator only verifies a root on a box that is small compared with the
   nonlinearity of the equation. On a wider box the relaxations are infinite, which is
-  valid but gives SCIP nothing until branching shrinks the box.
+  valid but gives SCIP no cuts or bounds until branching shrinks the box.
 
 ## Cost of an opaque term
 
-SCIP's own expressions expose structure that a JAX term hides. SCIP's nonlinear handlers
-detect a product of binaries, a quadratic form or a convex sum, and relax it exactly or
-linearize it. A JAX term gets McCormick relaxations instead, which are weaker on such
-structure, and branching has to make up the difference. The analysis above recovers the
-affine parts and the separable sums. For other structure, write that part of the
-function in a form the analysis splits off, or accept more nodes.
+SCIP can detect structure in its own expressions that it cannot detect inside a JAX
+term. SCIP's nonlinear handlers detect a product of binaries, a quadratic form or a
+convex sum, and relax it exactly or linearize it. A JAX term is relaxed with McCormick
+relaxations instead, which are weaker on such structure, so SCIP needs more branching to
+reach the same bounds. The analysis above splits off the affine parts and the separable
+sums. For other structure, write that part of the function in a form the analysis splits
+off, or accept more nodes.

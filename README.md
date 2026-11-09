@@ -12,8 +12,8 @@ relaxes.
 ## Installation
 
 JAX-CIP builds from source with Meson and links SCIP 10.1 from the SCIP_jll binaries. It
-runs its programs through [cyxla](https://github.com/nardi/cyxla), which installs a PJRT
-CPU plugin from a wheel, so nothing downloads at run time:
+runs its programs with [cyxla](https://github.com/nardi/cyxla), whose `cpu` extra
+installs a PJRT CPU plugin from a wheel, so nothing is downloaded at run time:
 
 ```bash
 git clone https://github.com/nardi/jax-cip
@@ -51,8 +51,8 @@ assert solution.status is jcp.Status.OPTIMAL
 ## Documentation
 
 The [documentation](https://nardi.github.io/jax-cip/) explains how SCIP uses JAX
-functions, and has a user guide, the API reference and a comparison with native SCIP on
-MINLPLib.
+functions, and contains a user guide, the API reference and a comparison with native
+SCIP on MINLPLib.
 
 ## License
 

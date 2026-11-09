@@ -2,11 +2,11 @@
 
 ## Parameters
 
-The second argument of every function is `params`, any pytree of arrays. Data that
-changes between solves belongs there instead of in a closure.
-[`compile`][jaxcip.compile] traces the functions for the structure and shapes of
-`params`, and the result then solves for any values of that layout without tracing or
-compiling again:
+The second argument of every function is `params`, any pytree of arrays. Put data that
+changes between solves there instead of in a closure. [`compile`][jaxcip.compile] traces
+the functions for the structure and shapes of `params`, and the resulting compiled
+problem can then be solved for any values of that layout without tracing or compiling
+again:
 
 <!-- name: test_parameters -->
 ```python
@@ -55,17 +55,18 @@ assert solution.status is jcp.Status.OPTIMAL
 assert solution.build.compiled == 0
 ```
 
-`compile` accepts arrays or `jax.ShapeDtypeStruct`s, since it only looks at shapes and
-types. Calling [`solve`][jaxcip.solve] with a `Problem` will compile it first. After the
-first time that is cheap, because the process and the disk cache keep the compiled
-terms. `solution.build` counts what the solve had to build.
+`compile` accepts arrays or `jax.ShapeDtypeStruct`s, since it only uses their shapes and
+dtypes. Calling [`solve`][jaxcip.solve] with a `Problem` will compile it first. After
+the first call that step is cheap, because the compiled terms are kept in the process
+and in the disk cache. `solution.build` contains the counts of what the solve built.
 
 ## Rows of one form
 
-A model often has many rows of the same form over different variables. [`rows`][jaxcip.rows]
-states them with one function of a row. Its `inputs` hold, for each row, the positions in a
-vector of the entries that the row reads, and its `params` hold one entry per row along the
-leading axis. The result is a function of the vector that returns one value per row:
+A model often has many rows of the same form over different variables.
+[`rows`][jaxcip.rows] defines them with one function of a single row. Its `inputs`
+argument contains, for each row, the positions in a vector of the entries that the row
+reads, and its `params` argument has one entry per row along the leading axis. The
+result is a function of the vector that returns one value per row:
 
 <!-- name: test_parameters -->
 ```python
@@ -93,20 +94,21 @@ solution = jcp.solve(many, options=jcp.SolveOptions(time_limit=60.0))
 assert solution.status is jcp.Status.OPTIMAL
 ```
 
-All 100 rows share the programs compiled for `row`, so compiling costs the same as for one
-row. `row` itself is split like any function: it becomes two terms, one for each summand,
-and an affine part of a row would become linear coefficients. A summand reads only the
-entries it uses. Each row gives SCIP only its own variables, as long as the vector is made of variables
-alone. A reshape, a slice, a transpose or a concatenation of variables is fine, and so is
+All 100 rows share the programs compiled for `row`, so compiling them takes as long as
+compiling one row. `row` itself is split like any function: it becomes two terms, one
+for each summand, and an affine part of a row would become linear coefficients. A
+summand reads only the entries it uses. In SCIP, the expressions of each row have only
+that row's variables as children, as long as the vector consists of variables alone. A
+reshape, a slice, a transpose or a concatenation of variables is fine, and so is
 `jnp.stack` of scalar variables. A vector that is computed from the variables, such as
 `jnp.exp(x)`, still works but makes every row depend on all the variables that some row
 reads. The same holds when the rows are only part of the output, as in
-`jnp.sum(evaluate(x))`. Write the rows as the whole value of a constraint, or add them to
-other terms with `+` and `-`.
+`jnp.sum(evaluate(x))`. Write the rows as the whole value of a constraint, or add them
+to other terms with `+` and `-`.
 
 The `params` of `rows` may be built from the `params` of the problem, so rows can change
-between solves. Their values enter the programs as inputs, and the compiled terms stay the
-same:
+between solves. Their values are inputs of the programs, so the compiled terms do not
+change:
 
 <!-- name: test_parameters -->
 ```python
