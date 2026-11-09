@@ -79,11 +79,12 @@ assert solution.status is jcp.Status.OPTIMAL
 ### Handler options
 
 [`HandlerOptions`][jaxcip.HandlerOptions] has a flag for each part of the expression
-handler that can be switched off. None of them changes the results. They are there to
-measure the effect of each part. Among them, `prefetch` makes a program run for one
-entry of a vector function also set the inputs of the other entries from SCIP's state,
-so that one run computes the results of all entries. The [performance](performance.md)
-page shows how to read the counters that are included in every solution.
+handler that can be switched off. None of them changes the results. They are for
+measuring the effect of each part. Among them, `prefetch` controls whether the handler
+sets the inputs of the other entries of a vector function from SCIP's state before it
+runs a program for one entry. With those inputs set, one run usually computes the
+results that the other entries need as well. The [performance](performance.md) page
+shows how to read the counters that are included in every solution.
 
 ## Native SCIP
 

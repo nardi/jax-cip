@@ -1,7 +1,7 @@
 # Nonlinear solving in SCIP
 
-This page describes the parts of SCIP that JAX-CIP adds plugins to. The full design is
-in [Vigerske and Gleixner (2018)](references.md) and in the [SCIP
+This page describes the parts of SCIP that JAX-CIP extends with its plugins. The full
+design is in [Vigerske and Gleixner (2018)](references.md) and in the [SCIP
 documentation](https://www.scipopt.org/doc/html/), and the [SCIP Optimization Suite 10.0
 report](https://arxiv.org/abs/2511.18580) describes the version in use.
 
