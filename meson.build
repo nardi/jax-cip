@@ -9,14 +9,18 @@ project(
 python = import('python').find_installation(pure: false)
 cython = find_program('cython')
 
-# SCIP and all of its dependencies come from the SCIP JLL through the wraps in
-# `subprojects`, which `meson-jll` generates from `meson-jll.lock`.
-scip = dependency('SCIP')
+# SCIP and all of its dependencies come from JLL packages through wraps in `subprojects`.
+# Only the lock file is committed, so `meson-jll` writes the wraps from it before anything
+# reads them.
+meson_jll = find_program('meson-jll')
+run_command(meson_jll, 'sync', check: true)
+
+scip = dependency('SCIP_jll')
 
 # Ipopt calls BLAS and LAPACK through libblastrampoline, which has no backend until one
 # is forwarded to it. OpenBLAS is linked in so the extension can forward it on import.
-openblas = dependency('OpenBLAS32')
-lbt = dependency('libblastrampoline')
+openblas = dependency('OpenBLAS32_jll')
+lbt = dependency('libblastrampoline_jll')
 
 # The PJRT C API header and the declarations of the cyxla runtime come with the installed
 # cyxla. The first directory holds the header, the second the `.pxd` files.

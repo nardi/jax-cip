@@ -1,0 +1,88 @@
+# Lets Meson fetch meson-jll 0.1.1 when it is not on PATH. The sections
+# named meson-jll below it hold the lock, which meson-jll writes itself.
+[wrap-file]
+directory = meson-jll-wrap-0.1.1
+source_url = https://github.com/nardi/meson-jll/releases/download/v0.1.1/meson-jll-wrap.tar.gz
+source_filename = meson-jll-wrap-0.1.1.tar.gz
+source_hash = 3041d201587eb175a8c66dec5f4f74e252f879cdf6cee0751b46bd6fdb8235e4
+
+[provide]
+program_names = meson-jll
+
+[meson-jll]
+format = 1
+
+[meson-jll.roots]
+OpenBLAS32 = 0.3.34+0
+SCIP = 1000.100.0+0
+
+[meson-jll.package.ASL]
+version = 0.1.5+0
+
+[meson-jll.package.Bzip2]
+version = 1.0.9+0
+
+[meson-jll.package.CompilerSupportLibraries]
+version = 1.5.7+0
+
+[meson-jll.package.GMP]
+version = 6.3.0+5
+
+[meson-jll.package.Hwloc]
+version = 2.15.0+0
+dependencies = XML2, Xorg_libpciaccess
+
+[meson-jll.package.Ipopt]
+version = 300.1400.2000+1
+dependencies = libblastrampoline, ASL, SPRAL, MUMPS_seq, CompilerSupportLibraries
+
+[meson-jll.package.Libiconv]
+version = 1.18.0+0
+
+[meson-jll.package.METIS]
+version = 5.1.4+0
+
+[meson-jll.package.MPFR]
+version = 4.2.2+1
+dependencies = GMP
+
+[meson-jll.package.MUMPS_seq]
+version = 500.900.100+0
+dependencies = METIS, libblastrampoline, CompilerSupportLibraries
+
+[meson-jll.package.Ncurses]
+version = 6.6.0+2
+
+[meson-jll.package.OpenBLAS32]
+version = 0.3.34+0
+dependencies = CompilerSupportLibraries, libblastrampoline
+
+[meson-jll.package.Readline]
+version = 8.3.3+0
+dependencies = Ncurses
+
+[meson-jll.package.SCIP]
+version = 1000.100.0+0
+dependencies = MPFR, boost, Ipopt, GMP, Zlib, CompilerSupportLibraries, Readline, Bzip2
+
+[meson-jll.package.SPRAL]
+version = 2025.9.18+1
+dependencies = METIS, CompilerSupportLibraries, libblastrampoline, Hwloc
+
+[meson-jll.package.XML2]
+version = 2.15.4+0
+dependencies = Libiconv, Zlib
+
+[meson-jll.package.Xorg_libpciaccess]
+version = 0.19.0+0
+dependencies = Zlib
+
+[meson-jll.package.Zlib]
+version = 1.3.2+0
+
+[meson-jll.package.boost]
+version = 1.87.0+0
+dependencies = Bzip2, Zlib
+
+[meson-jll.package.libblastrampoline]
+version = 5.16.0+0

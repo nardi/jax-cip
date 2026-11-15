@@ -29,7 +29,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: subprojects/packagecache
-        key: jll-${{ runner.os }}-${{ hashFiles('meson-jll.lock') }}
+        key: jll-${{ runner.os }}-${{ hashFiles('subprojects/meson-jll.lock.wrap') }}
 
     - name: Sync dependencies
       shell: bash
