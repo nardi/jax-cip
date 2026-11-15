@@ -19,11 +19,9 @@ site/
 coverage.xml
 .hypothesis/
 
-# Meson subprojects are extracted from the committed wraps on configure, so only the
-# wraps, their overlays and the lock file are tracked.
+# Meson extracts the subprojects from the lock file on configure, so only the lock is tracked.
 /subprojects/*
-!/subprojects/*.wrap
-!/subprojects/packagefiles/
+!/subprojects/meson-jll.lock.wrap
 
 # Coverage builds copy the generated C files next to the Cython sources.
 /src/jaxcip/*.c

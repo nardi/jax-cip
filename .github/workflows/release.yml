@@ -10,7 +10,8 @@ on:
       - pyproject.toml
       - meson.build
       - meson.options
-      - meson-jll.lock
+      - subprojects/meson-jll.lock.wrap
+      - build_backend/**
       - src/**/meson.build
       - scripts/repair_wheel.py
       - scripts/smoke_test.py

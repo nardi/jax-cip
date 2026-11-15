@@ -8,10 +8,11 @@ through [cyxla](https://nardi.github.io/cyxla/). CI tests it on Linux x86-64 wit
 
 The extension modules link SCIP 10.1 with SoPlex and Ipopt from the
 [SCIP_jll](https://github.com/JuliaBinaryWrappers/SCIP_jll.jl) binaries that Julia
-publishes. [meson-jll](https://github.com/nardi/meson-jll) turns those packages into
-Meson wraps, and the repository commits the wraps for every platform under
-`subprojects`, pinned by `meson-jll.lock`. Meson downloads the tarballs it needs on the
-first build, so you don't need SCIP installed on the system.
+publishes. [meson-jll](https://nardi.github.io/meson-jll/) turns those packages into
+Meson wraps. The repository commits only the lock file `subprojects/meson-jll.lock.wrap`,
+and the first configuration downloads `meson-jll` from its release and writes the wraps.
+Meson then downloads the tarballs it needs, so you do not need SCIP installed on the
+system.
 
 ## PJRT plugin
 
